@@ -1,2 +1,5 @@
 API-metadata*
 venv/
+raw_data_met_office/
+electricity_data.csv
+weather_data.csv

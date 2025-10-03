@@ -50,7 +50,7 @@ Relevant data for all of the above variables can be found on the following websi
 - Analyse supply/demand behaviours and test hypotheses
 - Idea: Analyse frequency spectrum
 
-### 4. Create models
+### 4. Develop forecasting models
 
 - Simple regression models
 - Deep learning models
@@ -60,7 +60,7 @@ Relevant data for all of the above variables can be found on the following websi
 
 - Backtest models on historical data and select the top performers
 
-## 6. Operational forecasting
+### 6. Operational forecasting
 
 - Establish data pipeline using streaming data
 - Use models to forecast prices from streaming data
