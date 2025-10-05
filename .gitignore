@@ -1,5 +1,9 @@
-API-metadata*
 venv/
-raw_data_met_office/
-electricity_data.csv
-weather_data.csv
+.venv/
+data/raw/
+data/processed/
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+*__pycache__/
+.pytest_cache/
+poetry.lock

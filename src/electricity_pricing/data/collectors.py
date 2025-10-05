@@ -1,38 +1,15 @@
 """
-Collect weather and electricity data to form the datasets used in the electricity price forecasting models.
+Data collection functions for BMRS API and weather data.
 
-# Raw data sources:
-
-- Elexon BMRS API: https://bmrs.elexon.co.uk/api-documentation/introduction)
-- Weather data from the UK Met Office: https://catalogue.ceda.ac.uk/uuid/99173f6a802147aeba430d96d2bb3099/
-- Solar irradiation data from the UK Met Office: https://catalogue.ceda.ac.uk/uuid/76e54f87291c4cd98c793e37524dc98e/
-
-Citations:
-- Met Office (2025): MIDAS Open: UK hourly weather observation data, v202507. NERC EDS Centre for Environmental Data Analysis, 18 July 2025. doi:10.5285/99173f6a802147aeba430d96d2bb3099.
-- Met Office (2025): MIDAS Open: UK hourly solar radiation data, v202507. NERC EDS Centre for Environmental Data Analysis, 18 July 2025. doi:10.5285/76e54f87291c4cd98c793e37524dc98e.
-
-# Instructions
-
-Users need to download the relevant raw weather data from the Met Office themselves and update the load paths below accordingly. 
-
-The weather station data can be found at the following links:
-- Heathrow: https://data.ceda.ac.uk/badc/ukmo-midas-open/data/uk-hourly-weather-obs/dataset-version-202507/greater-london/00708_heathrow)
-- Crosby: https://data.ceda.ac.uk/badc/ukmo-midas-open/data/uk-hourly-weather-obs/dataset-version-202507/merseyside/17309_crosby)
-- Dyce: https://data.ceda.ac.uk/badc/ukmo-midas-open/data/uk-hourly-weather-obs/dataset-version-202507/aberdeenshire/00161_dyce)
-
-# Glossary of terms
-
-- CCGT: Combined cycle gas turbine
-- OCGT: Open cycle gas turbine
-- NPSHYD: Non-pumped storage hydropower
-- PS: Pumped storage
-- INTER:  Imports/exports from/to other grids via interconnectors
-- AGPT: Actual generation data per settlement period aggregrated by power system resource type
-- FUELHH: Half-hourly generation outturn aggregrated by fuel type
+This module provides functions to collect:
+- Electricity generation data by fuel type (AGPT)
+- Interconnector flows (FUELHH)
+- Demand data (INDO/ITSO)
+- Market price index data
+- Weather observations from locally stored Met Office files
 """
 
 import os
-import json
 from datetime import datetime, timedelta
 import requests
 import numpy as np
@@ -47,6 +24,7 @@ def collect_agpt_data(start_date, end_date, verbose=False):
     Args:
         start_date: Start date as string (YYYY-MM-DD)
         end_date: End date as string (YYYY-MM-DD)
+        verbose: If True, print progress messages
 
     Returns:
         DataFrame with generation data by fuel type
@@ -60,7 +38,6 @@ def collect_agpt_data(start_date, end_date, verbose=False):
     current_start = start
 
     while current_start < end:
-        # Calculate chunk end (4 days maximum)
         current_end = min(current_start + timedelta(days=3), end)
 
         params = {
@@ -82,11 +59,9 @@ def collect_agpt_data(start_date, end_date, verbose=False):
 
         current_start = current_end
 
-    # Process data
     df = pd.DataFrame(all_data)
     df['startTime'] = pd.to_datetime(df['startTime'])
 
-    # Create pivot table
     df_AGPT = df.pivot_table(
         index=['settlementDate', 'settlementPeriod', 'startTime'],
         columns='psrType',
@@ -125,6 +100,7 @@ def collect_fuelhh_data(start_date, end_date, verbose=False):
     Args:
         start_date: Start date as string (YYYY-MM-DD)
         end_date: End date as string (YYYY-MM-DD)
+        verbose: If True, print progress messages
 
     Returns:
         DataFrame with generation data including interconnectors
@@ -138,7 +114,6 @@ def collect_fuelhh_data(start_date, end_date, verbose=False):
     current_start = start
 
     while current_start < end:
-        # Calculate chunk end (4 days maximum)
         current_end = min(current_start + timedelta(days=3), end)
 
         params = {
@@ -160,11 +135,9 @@ def collect_fuelhh_data(start_date, end_date, verbose=False):
 
         current_start = current_end
 
-    # Process data
     df = pd.DataFrame(all_data)
     df['startTime'] = pd.to_datetime(df['startTime'])
 
-    # Create pivot table
     df_FUELHH = df.pivot_table(
         index=['settlementDate', 'settlementPeriod', 'startTime'],
         columns='fuelType',
@@ -199,6 +172,7 @@ def collect_demand_data(start_date, end_date, verbose=False):
     Args:
         start_date: Start date as string (YYYY-MM-DD)
         end_date: End date as string (YYYY-MM-DD)
+        verbose: If True, print progress messages
 
     Returns:
         DataFrame with INDO and ITSO demand data
@@ -212,7 +186,6 @@ def collect_demand_data(start_date, end_date, verbose=False):
     current_start = start
 
     while current_start < end:
-        # Calculate chunk end (4 days maximum)
         current_end = min(current_start + timedelta(days=3), end)
 
         params = {
@@ -235,11 +208,9 @@ def collect_demand_data(start_date, end_date, verbose=False):
 
         current_start = current_end
 
-    # Process data
     df = pd.DataFrame(all_data)
     df['startTime'] = pd.to_datetime(df['startTime'])
 
-    # Create pivot table
     df_demand = df.pivot_table(
         index=['settlementDate', 'settlementPeriod', 'startTime'],
         values=['initialDemandOutturn', 'initialTransmissionSystemDemandOutturn']
@@ -255,7 +226,7 @@ def collect_demand_data(start_date, end_date, verbose=False):
     return df_demand
 
 
-def collect_price_data(start_date, end_date, verbose=False):
+def collect_mip_data(start_date, end_date, verbose=False):
     """
     Collect market price index data from BMRS API.
     Handles 4-day API limit by chunking requests.
@@ -263,6 +234,7 @@ def collect_price_data(start_date, end_date, verbose=False):
     Args:
         start_date: Start date as string (YYYY-MM-DD)
         end_date: End date as string (YYYY-MM-DD)
+        verbose: If True, print progress messages
 
     Returns:
         DataFrame with price and volume data
@@ -276,7 +248,6 @@ def collect_price_data(start_date, end_date, verbose=False):
     current_start = start
 
     while current_start < end:
-        # Calculate chunk end (4 days maximum)
         current_end = min(current_start + timedelta(days=4), end)
 
         params = {
@@ -299,11 +270,9 @@ def collect_price_data(start_date, end_date, verbose=False):
 
         current_start = current_end
 
-    # Process data
     df = pd.DataFrame(all_data)
     df['startTime'] = pd.to_datetime(df['startTime'])
 
-    # Create pivot table
     df_price = df.pivot_table(
         index=['settlementDate', 'settlementPeriod', 'startTime'],
         values=['price', 'volume']
@@ -311,88 +280,84 @@ def collect_price_data(start_date, end_date, verbose=False):
 
     df_price = df_price.sort_values(['settlementDate', 'settlementPeriod']).reset_index(drop=True)
 
+    df_price.rename(columns={'price': 'marketIndexPrice', 'volume': 'marketIndexTradingVolume'}, inplace=True)
+
     return df_price
 
 
-def create_bmrs_dataset(start_date, end_date, output_path="electricity_data.csv", verbose=False):
+def collect_gas_price_data(start_date, end_date, path_to_file):
     """
-    Create merged BMRS dataset combining generation, demand, and pricing data.
+    Collect gas price data from locally stored Excel file.
+
+    Returns daily gas prices that can be merged with settlement period data.
+    The daily price will be broadcast to all settlement periods for that day.
 
     Args:
         start_date: Start date as string (YYYY-MM-DD)
         end_date: End date as string (YYYY-MM-DD)
-        output_path: Path to save the output CSV file
+        path_to_file: Path to Excel file containing gas price data
 
     Returns:
-        DataFrame with merged BMRS data
+        DataFrame with settlementDate and naturalGasPrice columns
     """
-    print("\n=== Collecting electricity Data ===")
+    df = pd.read_excel(path_to_file, sheet_name="Table 1 Daily SAP of Gas", header=5)
 
-    # Collect all datasets
-    df_agpt = collect_agpt_data(start_date, end_date, verbose=verbose)
-    df_fuelhh = collect_fuelhh_data(start_date, end_date, verbose=verbose)
-    df_demand = collect_demand_data(start_date, end_date, verbose=verbose)
-    df_price = collect_price_data(start_date, end_date, verbose=verbose)
+    # Filter date range and drop unnecessary columns
+    df.drop(columns='SAP seven-day rolling average', inplace=True)
+    df = df.loc[(df['Date'] >= start_date) & (df['Date'] <= end_date)].copy()
 
-    # Merge generation datasets (AGPT with interconnector from FUELHH)
-    print("\nMerging generation datasets...")
-    df_generation = df_agpt.merge(
-        df_fuelhh[['settlementDate', 'settlementPeriod', 'INTER']],
-        on=['settlementDate', 'settlementPeriod'],
-        how='inner'
-    )
+    # Convert price units from p/kWh to £/MWh
+    PENCE_TO_POUNDS = 1 / 100
+    KWH_TO_MWH = 1000
+    df['naturalGasPrice'] = df['SAP actual day'] * PENCE_TO_POUNDS * KWH_TO_MWH
 
-    # Merge with demand data
-    print("Merging with demand data...")
-    df_merged = df_generation.merge(
-        df_demand[['settlementDate', 'settlementPeriod', 'INDO', 'ITSO']],
-        on=['settlementDate', 'settlementPeriod'],
-        how='inner'
-    )
+    # Convert Date to settlementDate format (string YYYY-MM-DD)
+    df['settlementDate'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
 
-    # Merge with price data
-    print("Merging with price data...")
-    df_merged = df_merged.merge(
-        df_price[['settlementDate', 'settlementPeriod', 'price', 'volume']],
-        on=['settlementDate', 'settlementPeriod'],
-        how='inner'
-    )
-
-    # Save to disk
-    print(f"\nSaving merged BMRS data to {output_path}...")
-    df_merged.to_csv(output_path, index=False)
-    print(f"Saved {len(df_merged)} records")
-
-    return df_merged
+    return df[['settlementDate', 'naturalGasPrice']]
 
 
-def create_weather_dataset(data_dir="raw_data_met_office", output_path="weather_data.csv"):
+def collect_weather_data(data_dir, locations=None, years=None):
     """
-    Create weather dataset from Met Office data files.
+    Load and process weather data from Met Office CSV files.
 
     Args:
         data_dir: Directory containing Met Office data
-        output_path: Path to save the output CSV file
+        locations: List of location names (default: ["heathrow", "crosby", "dyce"])
+        years: List of years to process (default: [2021, 2022, 2023, 2024])
 
     Returns:
-        DataFrame with weather data
+        DataFrame with processed weather data from all locations and years
+
+    Helpful Information:
+        - missing_value: NA
+        - ob_time: Date and time (YYYY-MM-DD HH:MM:SS) of the observation
+        - wind_speed_unit_id: Code to describe the origin of the wind speed units.
+        - wind_speed_unit_id=0: wind speed estimated (metres per second)
+        - wind_speed_unit_id=1: wind speed from anemometer (metres per second)
+        - wind_speed_unit_id=3: wind speed estimated (knots)
+        - wind_speed_unit_id=4: wind speed from anemometer (knots)
+        - wind_direction: wind direction in true degrees
+        - wind_speed: wind speed (knots)
+        - visibility: visibility (decametres)
+        - air_temperature: Air temperature (degrees celsius)
+        - glbl_irad_amt: Global solar irradiation amount (KJ/m^2)
     """
-    print("\n=== Processing Weather Data ===")
+    if locations is None:
+        locations = ["heathrow", "crosby", "dyce"]
+    if years is None:
+        years = [2021, 2022, 2023, 2024]
 
-    locations = ["heathrow", "crosby", "dyce"]
-    years = [2021, 2022, 2023, 2024]
     KNOT_TO_MS = 0.514  # 1 knot = 0.514 m/s
-
     dfs = []
 
     for location in locations:
         base_dir = os.path.join(data_dir, location)
         weather_dir = os.path.join(base_dir, "weather")
-        radiation_dir = os.path.join(base_dir, "solar_radiation")
+        irradiation_dir = os.path.join(base_dir, "solar_irradiation")
         dfs_location = []
 
         for year in years:
-            # Load hourly weather data
             weather_path = os.path.join(weather_dir, f"hourly_weather_{location}_{year}.csv")
 
             if not os.path.exists(weather_path):
@@ -413,10 +378,10 @@ def create_weather_dataset(data_dir="raw_data_met_office", output_path="weather_
             df_hw = df_hw.iloc[:-1]  # Drop last row ('end of data' line)
             df_hw['ob_time'] = pd.to_datetime(df_hw['ob_time'])
 
-            # Load solar radiation data if available
-            radiation_path = os.path.join(radiation_dir, f"solar_radiation_{location}_{year}.csv")
-            if os.path.exists(radiation_path):
-                df_rad = pd.read_csv(radiation_path, header=78, low_memory=False)
+            # Load solar irradiation data if available
+            irradiation_path = os.path.join(irradiation_dir, f"solar_irradiation_{location}_{year}.csv")
+            if os.path.exists(irradiation_path):
+                df_rad = pd.read_csv(irradiation_path, header=78, low_memory=False)
                 df_rad = df_rad[['ob_end_time', 'glbl_irad_amt']].iloc[:-1]
                 df_rad['ob_time'] = pd.to_datetime(df_rad['ob_end_time'])
                 df_rad.drop(columns='ob_end_time', inplace=True)
@@ -429,51 +394,11 @@ def create_weather_dataset(data_dir="raw_data_met_office", output_path="weather_
             dfs_location.append(df_merged)
 
         if dfs_location:
-            # Combine all years for this location
             df_location = pd.concat(dfs_location, ignore_index=True)
             df_location['location'] = location.capitalize()
             dfs.append(df_location)
 
     if not dfs:
-        print("Error: No weather data found")
-        return None
+        raise ValueError("No weather data found")
 
-    # Combine all locations
-    df_weather = pd.concat(dfs, ignore_index=True)
-
-    # Save to disk
-    print(f"\nSaving weather data to {output_path}...")
-    df_weather.to_csv(output_path, index=False)
-    print(f"Saved {len(df_weather)} records")
-
-    return df_weather
-
-
-def main():
-    """
-    Main function to create both electricity and weather datasets.
-    """
-    # electricity data parameters
-    elec_start_date = "2021-01-01"
-    elec_end_date = "2024-12-31"
-    elec_output_path = "electricity_data.csv"
-
-    # Weather data parameters
-    weather_data_dir = "raw_data_met_office"
-    weather_output_path = "weather_data.csv"
-
-    # Create BMRS dataset
-    df_electricity = create_bmrs_dataset(elec_start_date, elec_end_date, elec_output_path)
-
-    # Create weather dataset
-    df_weather = create_weather_dataset(weather_data_dir, weather_output_path)
-
-    print("\n=== Dataset Creation Complete ===")
-    if df_electricity is not None:
-        print(f"BMRS dataset: {len(df_electricity)} records saved to {elec_output_path}")
-    if df_weather is not None:
-        print(f"Weather dataset: {len(df_weather)} records saved to {weather_output_path}")
-
-
-if __name__ == "__main__":
-    main()
+    return pd.concat(dfs, ignore_index=True)
