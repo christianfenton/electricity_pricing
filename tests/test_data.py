@@ -51,5 +51,5 @@ class TestBMRSCollectors:
 
         assert isinstance(df, pd.DataFrame)
         assert len(df) > 0
-        assert 'price' in df.columns
-        assert 'volume' in df.columns
+        assert 'marketIndexPrice' in df.columns
+        assert 'marketIndexTradingVolume' in df.columns

@@ -1,7 +1,6 @@
 venv/
 .venv/
 data/raw/
-data/processed/
 .ipynb_checkpoints/
 */.ipynb_checkpoints/
 *__pycache__/
