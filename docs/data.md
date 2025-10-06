@@ -1,19 +1,8 @@
 # Data Pipeline
 
-This directory contains a Python script and configuration file to collect weather, electricity price and electricity generation data.
-
 ## Instructions
 
-**NB:** Users need to download the relevant raw weather and gas price data from the Met Office and Office for National Statistics (ONS) and update the paths in the `create_datasets.py` accordingly. 
-
-The raw weather data can be found on the Met Office MIDAS archive at:
-- Heathrow: https://data.ceda.ac.uk/badc/ukmo-midas-open/data/uk-hourly-weather-obs/dataset-version-202507/greater-london/00708_heathrow
-- Crosby: https://data.ceda.ac.uk/badc/ukmo-midas-open/data/uk-hourly-weather-obs/dataset-version-202507/merseyside/17309_crosby
-- Dyce: https://data.ceda.ac.uk/badc/ukmo-midas-open/data/uk-hourly-weather-obs/dataset-version-202507/aberdeenshire/00161_dyce
-
-The raw natural gas price data can be found on the ONS website: https://www.ons.gov.uk/economy/economicoutputandproductivity/output/datasets/systemaveragepricesapofgas
-
-The data can then be processed by running
+Processed weather and electricity price data is already available in this repository's `data/processed/` directory. Users that want to  process raw data themselves can download the relevant raw weather and gas price data from the Met Office and Office for National Statistics websites, update the paths in the `create_datasets.py` accordingly, and run
 ```bash
 python create_datasets.py
 ```
@@ -25,6 +14,11 @@ python create_datasets.py
 - Heathrow, Greater London: Close to major population centre and wind farms in the Thames Estuaray
 - Crosby, Merseyside: Close to major population centre and wind farms in the Irish Sea
 - Dyce, Aberdeenshire: Close to major population centre and wind farms in the North Sea
+
+The raw weather data can be found on the Met Office MIDAS archive at:
+- Heathrow: https://data.ceda.ac.uk/badc/ukmo-midas-open/data/uk-hourly-weather-obs/dataset-version-202507/greater-london/00708_heathrow
+- Crosby: https://data.ceda.ac.uk/badc/ukmo-midas-open/data/uk-hourly-weather-obs/dataset-version-202507/merseyside/17309_crosby
+- Dyce: https://data.ceda.ac.uk/badc/ukmo-midas-open/data/uk-hourly-weather-obs/dataset-version-202507/aberdeenshire/00161_dyce
 
 ### Units
 
@@ -56,3 +50,4 @@ The AGPT data does not include flows from interconnects, while the FUELHH data d
 - Elexon BMRS API: https://bmrs.elexon.co.uk/api-documentation/introduction
 - Met Office (2025): MIDAS Open: UK hourly weather observation data, v202507. NERC EDS Centre for Environmental Data Analysis, 18 July 2025. doi:10.5285/99173f6a802147aeba430d96d2bb3099.
 - Met Office (2025): MIDAS Open: UK hourly solar radiation data, v202507. NERC EDS Centre for Environmental Data Analysis, 18 July 2025. doi:10.5285/76e54f87291c4cd98c793e37524dc98e.
+- Natural gas prices: https://www.ons.gov.uk/economy/economicoutputandproductivity/output/datasets/systemaveragepricesapofgas
