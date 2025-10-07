@@ -27,7 +27,7 @@ python create_datasets.py
 
 ### Weather data locations
 
-- Heathrow, Greater London: Close to major population centre and wind farms in the Thames Estuaray
+- Heathrow, Greater London: Close to major population centre and wind farms in the Thames Estuary
 - Crosby, Merseyside: Close to major population centre and wind farms in the Irish Sea
 - Dyce, Aberdeenshire: Close to major population centre and wind farms in the North Sea
 
