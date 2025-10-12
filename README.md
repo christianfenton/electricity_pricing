@@ -15,17 +15,22 @@ poetry install
 
 ## Overview
 
-- `data/processed/`: Contains CSV files with data on electricity prices, weather, and some other key variables.
-- `notebooks/exploratory_analysis.ipynb`: Exploratory data analysis investigating trends, seasonal patterns, and correlations between electricity prices, weather variables, and generation sources.
+This project provides:
+
+- **Data collection and processing:** GB electricity prices, demand forecasts, generation data, and weather
+- **Exploratory analysis:** Investigating trends, seasonal patterns, and correlations
+- **Forecasting models** Only ARX (autoregressive with exogenous variables) time series models are currently available
+
+## Notebooks
+
+- **`exploratory_analysis.ipynb`**: Exploratory data analysis investigating trends, seasonal patterns, and correlations between electricity prices, weather variables, and generation sources.
+- **`model_development.ipynb`**: Development and evaluation of ARX models for electricity price forecasting, including feature engineering and model selection.
 
 ## Data
 
 Processed weather and electricity price data is already available in this repository's `data/processed/` directory.
 
-Users that want to process raw data themselves can download the relevant datasets, update the paths in `create_datasets.py` accordingly, and run
-```bash
-python create_datasets.py
-```
+Users that want to process raw data themselves can download the relevant datasets, update the paths in the data collection scripts, and run the data pipeline.
 
 ### Data Sources
 
@@ -48,7 +53,7 @@ Met Office (2025): MIDAS Open: UK hourly solar radiation data, v202507. NERC EDS
 - Wind speed: metres per second (m/s)
 - Wind direction: degrees
 - Temperature: degrees Celsius
-- Solar irradiation: kilojoules per metre squared (KJ/m^2)
+- Solar irradiation: kilojoules per metre squared (KJ/m²)
 
 ### Glossary of terms
 
@@ -59,8 +64,42 @@ Met Office (2025): MIDAS Open: UK hourly solar radiation data, v202507. NERC EDS
 - OCGT: Open cycle gas turbine
 - NPSHYD: Non-pumped storage hydropower
 - PS: Pumped storage
-- INTER:  Imports/exports from/to other grids via interconnectors
+- INTER: Imports/exports from/to other grids via interconnectors
 - INDO: Initial national demand outturn
 - ITSDO: Initial transmission system demand outturn
 
 The AGPT data does not include flows from interconnects, while the FUELHH data does not include energy generation from solar or embedded generation. The AGPT and FUELHH data are merged to get an accurate breakdown of the different energy generation sources.
+
+## Models
+
+### ARX (Autoregressive with Exogenous Variables)
+
+The ARX model forecasts electricity prices as a linear combination of:
+- **Autoregressive terms**: Lagged prices from previous time periods
+- **Exogenous variables**: Demand forecasts, generation forecasts, temporal features (holidays, weekends), etc.
+
+See `notebooks/model_development.ipynb` for example usage.
+
+## API Reference
+
+### Models
+- `ARXModel`: Autoregressive model with exogenous variables
+
+### Regressors
+- `LinearRegression`: Ordinary least squares regression
+
+### Features
+- `is_holiday()`: Create holiday indicator features
+- `is_weekend()`: Create weekend indicator features
+- `add_intercept()`: Add intercept column for linear models
+
+### Evaluation Metrics
+- `rmse()`: Root mean square error
+- `mae()`: Mean absolute error
+- `mape()`: Mean absolute percentage error
+- `r2_score()`: Coefficient of determination
+- `relative_rmse()`: Relative root mean square error
+
+### Utilities
+- `timeshift()`: Shift time-indexed `pandas.DataFrame`s
+- `train_test_split()`: Split time-indexed data into train/test sets
