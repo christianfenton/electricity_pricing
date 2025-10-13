@@ -27,6 +27,35 @@ This project provides:
 - **`exploratory_analysis.ipynb`**: Exploratory data analysis investigating trends, seasonal patterns, and correlations between electricity prices, weather variables, and generation sources.
 - **`model_development.ipynb`**: Development and discussion of models for electricity price forecasting, including feature engineering and model selection.
 
+## Models
+
+### `ARXModel`
+
+Autoregressive model with exogenous variables (ARX). Models electricity prices as a linear combination of autoregressive terms (lagged prices) and exogenous variables (e.g. forecasted demand, generation, weather).
+
+**Basic Usage**
+
+```python
+from electricity_pricing.models import ARXModel
+
+# Create and train model with default linear regression
+model = ARXModel()
+model.fit(X_train, y_train)
+
+# Generate predictions
+predictions = model.predict(X_test)
+```
+
+**Using Custom Regressors**
+
+```python
+from sklearn.linear_model import Ridge
+
+# ARX with Ridge regularisation
+ridge_model = ARXModel(regressor=Ridge(alpha=1.0))
+ridge_model.fit(X_train, y_train)
+```
+
 ## Data
 
 Processed weather and electricity price data is already available in this repository's `data/processed/` directory.
@@ -71,23 +100,7 @@ Met Office (2025): MIDAS Open: UK hourly solar radiation data, v202507. NERC EDS
 
 The AGPT data does not include flows from interconnects, while the FUELHH data does not include energy generation from solar or embedded generation. The AGPT and FUELHH data are merged to get an accurate breakdown of the different energy generation sources.
 
-## Models
-
-### ARX (Autoregressive with Exogenous Variables)
-
-The ARX model forecasts electricity prices as a linear combination of:
-- **Autoregressive terms**: Lagged prices from previous time periods
-- **Exogenous variables**: Demand forecasts, generation forecasts, temporal features (holidays, weekends), etc.
-
-See `notebooks/model_development.ipynb` for example usage.
-
 ## API Reference
-
-### Models
-- `ARXModel`: Autoregressive model with exogenous variables
-
-### Regressors
-- `LinearRegression`: Ordinary least squares regression
 
 ### Features
 - `is_holiday()`: Create holiday indicator features
