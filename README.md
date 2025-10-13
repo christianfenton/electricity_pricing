@@ -19,12 +19,13 @@ This project provides:
 
 - **Data collection and processing:** GB electricity prices, demand forecasts, generation data, and weather
 - **Exploratory analysis:** Investigating trends, seasonal patterns, and correlations
-- **Forecasting models** Only ARX (autoregressive with exogenous variables) time series models are currently available
+- **Forecasting models:** Currently only ARX (autoregressive with exogenous variables) time series models are available
 
 ## Notebooks
 
+- **`example_ARX.ipynb`**: Demonstration of electricity price forecasting models with ARX-style time series models.
 - **`exploratory_analysis.ipynb`**: Exploratory data analysis investigating trends, seasonal patterns, and correlations between electricity prices, weather variables, and generation sources.
-- **`model_development.ipynb`**: Development and evaluation of ARX models for electricity price forecasting, including feature engineering and model selection.
+- **`model_development.ipynb`**: Development and discussion of models for electricity price forecasting, including feature engineering and model selection.
 
 ## Data
 
