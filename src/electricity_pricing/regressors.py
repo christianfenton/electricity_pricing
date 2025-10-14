@@ -38,7 +38,7 @@ class LinearRegression():
         Returns:
             self: The fitted model
         """
-        self.params = np.linalg.inv(X.T @ X) @ X.T @ y
+        self.params = np.linalg.solve(X.T @ X,  X.T @ y)
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:

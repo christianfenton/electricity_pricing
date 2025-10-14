@@ -62,7 +62,7 @@ def train_test_split(
     mask_train = (df.index >= train_start) & (df.index <= train_end)
     mask_test = (df.index >= test_start) & (df.index <= test_end)
 
-    df_train = df[mask_train].copy().reset_index(drop=True)
-    df_test = df[mask_test].copy().reset_index(drop=True)
+    df_train = df[mask_train].copy()#.reset_index(drop=True)
+    df_test = df[mask_test].copy()#.reset_index(drop=True)
 
     return df_train, df_test
