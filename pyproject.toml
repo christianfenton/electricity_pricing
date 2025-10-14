@@ -1,6 +1,6 @@
 [project]
 name = "electricity-pricing"
-version = "0.3.0"
+version = "0.4.0"
 description = "Electricity price forecasting for GB day-ahead markets"
 authors = [
     {name = "christianfenton"}
