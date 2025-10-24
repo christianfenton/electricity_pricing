@@ -112,6 +112,73 @@ def timeshift(series: pd.Series, shift: pd.Timedelta, name: Optional[str] = None
     return series_shifted
 
 
+def create_timestamps(
+    df: pd.DataFrame,
+    date_column: str,
+    period_column: str,
+    tz: str = 'Europe/London'
+) -> pd.Series:
+    """
+    Create timezone-aware timestamps from settlement dates and periods.
+
+    Args:
+        df: `pandas.DataFrame` with settlement date and period columns
+        date_column: Name of settlement date column
+        period_column: Name of settlement period column
+        tz: Timezone for timestamps (default: 'Europe/London')
+
+    Returns:
+        `pandas.Series`
+    """
+    base_timestamps = pd.to_datetime(df[date_column]).dt.tz_localize(tz)
+    period_offsets = pd.to_timedelta((df[period_column] - 1) * 30, unit='m')
+    timestamps = base_timestamps + period_offsets
+    return pd.Series(timestamps, index=df.index, name='DATETIME')
+
+
+def validate_timestamps(
+    df: pd.DataFrame,
+    datetime_column: str,
+    date_column: str,
+    period_column: str,
+    tz: str = 'Europe/London'
+) -> bool:
+    """
+    Validate that timestamps match the (date, period) representation.
+
+    Args:
+        df: DataFrame with both timestamps and (date, period) columns
+        datetime_column: Name of timestamp column to validate
+        date_column: Name of settlement date column
+        period_column: Name of settlement period column
+        tz: Timezone to use for reconstruction
+    """
+    reconstructed = create_timestamps(
+        df[[date_column, period_column]],
+        date_column=date_column,
+        period_column=period_column,
+        tz=tz
+    )
+
+    if datetime_column in df.columns:
+        existing = df[datetime_column]
+        mismatches = existing != reconstructed
+
+        if mismatches.any():
+            n_mismatches = mismatches.sum()
+            first_mismatch_idx = mismatches.idxmax()
+            raise ValueError(
+                f"Timestamp inconsistency detected: {n_mismatches} mismatches found.\n"
+                f"First mismatch at index {first_mismatch_idx}:\n"
+                f"  Existing:      {existing.loc[first_mismatch_idx]}\n"
+                f"  Reconstructed: {reconstructed.loc[first_mismatch_idx]}\n"
+                f"  Date:          {df.loc[first_mismatch_idx, date_column]}\n"
+                f"  Period:        {df.loc[first_mismatch_idx, period_column]}"
+            )
+
+    return True
+
+
 def train_test_split(
     df: pd.DataFrame | pd.Series,
     train_range: pd.DatetimeIndex,
