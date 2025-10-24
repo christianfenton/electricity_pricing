@@ -6,37 +6,8 @@ number of settlement periods. The functions assume UK DST transitions.
 """
 
 import pandas as pd
-from datetime import date
 from typing import Tuple, List
-
-
-def last_sunday_of_month(year: int, month: int) -> date:
-    """
-    Return the last Sunday of a given month.
-
-    Args:
-        year (int): Year
-        month (int): Month
-    """
-    last_day = pd.Timestamp(year=year, month=month, day=1) + pd.offsets.MonthEnd(1)
-    days_back = (last_day.dayofweek - 6) % 7  # Sunday is 6
-    last_sunday = last_day - pd.Timedelta(days=days_back)
-    return last_sunday.date()
-
-
-def get_expected_periods(date: pd.Timestamp) -> int:
-    """
-    Return the expected number of settlement periods for a given date in the UK.
-    """
-    year = date.year
-    spring_dst = last_sunday_of_month(year, 3)
-    autumn_dst = last_sunday_of_month(year, 10)
-    if date.date() == spring_dst:
-        return 46
-    elif date.date() == autumn_dst:
-        return 50
-    else:
-        return 48
+from ..utils import get_expected_periods, last_sunday_of_month
 
 
 def find_irregular_days(

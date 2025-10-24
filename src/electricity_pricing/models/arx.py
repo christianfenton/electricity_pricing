@@ -1,10 +1,12 @@
 """Autoregressive model with exogenous variables (ARX)."""
 
 import numpy as np
+import pandas as pd
+import pandas.api.types as ptypes
 from collections import deque
 from .base import ForecastModel
-from ..regressors import LinearRegression
-from typing import List
+from sklearn.linear_model import LinearRegression
+from typing import List, Optional
 
 
 class ARXModel(ForecastModel):
@@ -14,197 +16,180 @@ class ARXModel(ForecastModel):
     Attributes:
         lags: List of autoregressive lag indices (e.g., [1] for an order-1 model)
         regressor: Underlying regression model (default: LinearRegression)
-
-    Example:
-        >>> from electricity_pricing.models import ARXModel
-        >>> from electricity_pricing.regressors import LinearRegression
-        >>>
-        >>> # Create model with 3 autoregressive lags
-        >>> model = ARXModel(lags=[1, 2, 3], regressor=LinearRegression())
-        >>>
-        >>> # Fit on endogenous variable history and exogenous features
-        >>> model.fit(endog, exog)
-        >>>
-        >>> # Forecasting:
-        >>> predictions = model.predict(
-        >>>     endog_history,  # endogenous variable history used to initialise AR terms
-        >>>     exog_future,    # exogenous features for forecast horizon
-        >>>     n_steps=48      # number of forecast steps
-        >>> )
-        >>>
-        >>> # Non-standard use cases:
-        >>> model.fit_raw(features, targets)  # features includes autoregressive and exogenous features
-        >>> predictions = model.predict_raw(features_test)
     """
 
-    def __init__(self, lags: List[int] = [1], regressor=LinearRegression()):
+    def __init__(self, lags: List[int] = [1], regressor=None):
         """
         Create an `ARXModel` instance.
 
         Args:
             lag: List of autoregressive lag indices. Default: `[1]`.
-            regressor: Regression model to use. Must implement fit(X, y) and 
-                predict(X) methods. Default: LinearRegression().
+            regressor: Scikit-learn compatible regression model. Must implement
+                fit(X, y) and predict(X) methods with coef_ and intercept_
+                attributes. Default: LinearRegression(fit_intercept=True).
         """
         self.lags = lags
-        self.regressor = regressor
+        self.regressor = regressor if regressor is not None else LinearRegression(fit_intercept=True)
         self._fitted = False  # indicate whether parameters have been fitted yet
 
-    def _build_ar_features(self, endog: np.ndarray):
+    def _build_ar_features(self, endog: pd.Series) -> pd.DataFrame:
         """
         Build autoregressive features from the endogenous variable history.
-
-        Args:
-            endog: Endogenous variables. Array-like with shape (n_samples,).
-
-        Returns:
-            ar: Autoregressive terms. Shape: (n_samples - max(lags), len(lags))
+        Returns a `pandas.DataFrame` with shape (n_samples - max(lags), len(lags)).
         """
-        n_samples = len(endog)
         max_lag = max(self.lags)
 
-        if n_samples <= max_lag:
+        if len(endog) <= max_lag:
             raise ValueError(
-                f"Endogenous variable must have more than max(lag)={max_lag} samples, got {n_samples}."
+                f"Endogenous variable must have more than max(lag)={max_lag} samples, got {len(endog)}."
             )
 
-        # Collect autoregressive terms
-        ar_terms = np.zeros((n_samples - max_lag, len(self.lags)))
-        for i, lag in enumerate(self.lags):
-            ar_terms[:, i] = endog[max_lag - lag : n_samples - lag]
+        # Shift columns for each lag
+        ar_df = pd.DataFrame({f'lag_{lag}': endog.shift(lag) for lag in self.lags})
 
-        return ar_terms
+        return ar_df.dropna()
 
-    def fit(self, endog: np.ndarray, exog: np.ndarray | None = None):
+    def fit(self, endog: pd.Series, exog: Optional[pd.DataFrame] = None):
         """
-        Fit the model parameters to observed data.
+        Fit model parameters to observed data.
+        Returns the fitted model.
 
         Args:
-            endog: Endogenous variable history. Array-like with shape (n_samples,).
-            exog: Exogenous variables. Array-like with shape (n_samples, n_features). Default: None.
+            endog: Endogenous variable. `pandas.Series` with datetime index.
+            exog: Exogenous variables.
+                If provided, should be a `pandas.DataFrame` with datetime index.
+                Default: None.
         """
-        assert endog.ndim == 1, "Expected `endog` to be a vector."
+        assert np.all(ptypes.is_datetime64_any_dtype(endog.index)), "endog must have datetime index."
+        if exog is not None:
+            assert np.all(ptypes.is_datetime64_any_dtype(exog.index)), "exog must have datetime index."
 
-        n_samples = len(endog)
         max_lag = max(self.lags)
 
+        if len(endog) <= max_lag:
+            raise ValueError(
+                f"Endogenous variable must have more than max(lag)={max_lag} samples, got {len(endog)}."
+            )
+
+        if exog is not None and len(exog) != len(endog):
+            raise ValueError(
+                f"Dimensions in endog ({len(endog)}) and exog ({len(exog)}) do not match."
+            )
+
+        # Store lag values from end of training data
+        self.lag_values = endog.iloc[-np.array(self.lags)]
+
+        # Build autoregressive features
+        ar_features = self._build_ar_features(endog)
+
+        # Create target vector (skip first max_lag rows to align with autoregressive features)
+        targets = endog.iloc[max_lag:]
+
+        # Combine AR features with exogenous variables
         if exog is not None:
-            if exog.ndim == 1:
-                exog = exog.reshape((-1, 1))
-            assert exog.shape[0] == n_samples, "Dimensions in `endog` and `exog` do not match."
+            # Skip first max_lag rows of exog to align with AR features
+            exog_aligned = exog.iloc[max_lag:].reset_index(drop=True)
+            features = pd.concat([ar_features.reset_index(drop=True), exog_aligned], axis=1)
+        else:
+            features = ar_features
 
-        # create target vector
-        targets = endog[max_lag:]  # skip forward so every target has correct number of AR terms
-
-        # Build feature matrix
-        features = self._build_ar_features(endog)  # autoregressive (AR) features
-        if exog is not None:
-            # add exogenous terms to feature matrix
-            exog_skipforward = exog[max_lag:]
-            features = np.column_stack([features, exog_skipforward])
-
-        # fit the regressor
-        self.regressor.fit(features, targets)
+        self.regressor.fit(features.values, targets.values)
         self._fitted = True
 
         return self
-    
-    def fit_raw(self, features: np.ndarray, target: np.ndarray):
-        """
-        Fit the model on observed data with a manually constructed feature 
-        matrix containing autoregressive and exogenous features.
 
-        Use this for full control over feature construction.
+    def forecast(
+        self,
+        steps: int,
+        exog: Optional[pd.DataFrame] = None,
+        endog_history: Optional[pd.Series] = None
+    ) -> np.ndarray:
+        """
+        Make a forecast.
 
         Args:
-            features: Array-like with shape (n_samples, n_features)
-            target: Target vector with shape (n_samples,)
+            steps: Number of steps to forecast ahead
+            exog: Exogenous variables for forecast horizon.
+                  If provided, should be a `pandas.DataFrame` with shape (steps, n_features).
+                  Default: None.
+            endog_history: Historical values of endogenous variable for AR lags used for forecasting.
+                If None, uses last lag values stored during fit().
+                If provided, should be a `pandas.Series` with shape (max(lag), ).
+                Default: None.
+
+        Returns:
+            predictions: Forecasted values of shape (steps,)
 
         Example:
-            >>> # Build features manually
-            >>> features = np.column_stack([lag1, lag2, exog1, exog2])
-            >>> model.fit_raw(features, target)
-        """
-        self.regressor.fit(features, target)
-        self._fitted = True
-        return self
+            # Forecast from end of training data
+            model.fit(y_train, X_train)
+            forecast = model.forecast(steps=48, exog=X_future)
 
-    def predict(self, endog_history: np.ndarray, exog_future: np.ndarray | None = None, n_steps: int = 1):
-        """
-        Generate future predictions for the endogenous variable from historical observations and exogenous features.
-
-        Args:
-            endog_history: Endogenous variable history. 
-                Should contain at least max(lags) values. 
-                Array-like with shape (n_history,).
-            exog_future: Exogenous features for the forecast horizon. 
-                Array-like with shape (n_steps, n_features_exog).
-                Default: None.
-            n_steps: Number of steps to forecast. Default: 1.
-
-        Returns:
-            predictions: Forecasted prices. Shape: (n_steps,).
+            # Forecast from a different starting point
+            forecast = model.forecast(steps=48, exog=X_future, endog_history=y_recent)
         """
         if not self._fitted:
-            raise ValueError("Model parameters have not been fitted yet.")
-        
-        assert endog_history.ndim == 1, "Expected `endog` to be a vector."
+            raise ValueError("Model must be fitted before calling forecast(). Call fit() first.")
 
-        if exog_future is not None:
-            if exog_future.ndim == 1:
-                exog_future = exog_future.reshape(-1, 1)
+        if exog is not None:
+            assert np.all(ptypes.is_datetime64_any_dtype(exog.index)), "exog must have datetime index."
+        if endog_history is not None:
+            assert np.all(ptypes.is_datetime64_any_dtype(endog_history.index)), "endog_history must have datetime index."
 
         max_lag = max(self.lags)
 
-        if len(endog_history) < max_lag:
-            raise ValueError(
-                f"Endogenous variable history must contain at least max(lags)={max_lag} values, got {len(endog_history)}."
-            )
+        if endog_history is None:
+            if not hasattr(self, 'lag_values'):
+                raise ValueError(
+                    "No lag values stored from fit(). Either fit the model or provide `endog_history`."
+                )
+            endog_buffer_init = self.lag_values.copy()
+        else:
+            if len(endog_history) < max_lag:
+                raise ValueError(
+                    f"endog_history must contain at least max(lags)={max_lag} values, "
+                    f"got {len(endog_history)}."
+                )
+            endog_buffer_init = endog_history.iloc[-np.array(self.lags)].values
 
-        if exog_future is not None and exog_future.shape[0] < n_steps:
-            raise ValueError(
-                f"exog_future must have {n_steps} rows, got {exog_future.shape[0]}"
-            )
+        exog_values = exog.values if exog is not None else None
 
-        # initialise buffer with recent history
-        endog_buffer = deque(endog_history, maxlen=max_lag)  # deque for fast append/pop operations
+        if exog_values is not None:
+            if exog_values.ndim == 1:
+                exog_values = exog_values.reshape(-1, 1)
+            if exog_values.shape[0] < steps:
+                raise ValueError(
+                    f"exog must have at least {steps} rows, got {exog_values.shape[0]}"
+                )
 
-        predictions = np.zeros(n_steps)
-
-        for i in range(n_steps):
-            # get autoregressive terms from buffer
+        # Make predictions
+        endog_buffer = deque(endog_buffer_init, maxlen=max_lag)
+        predictions = np.zeros(steps)
+        for i in range(steps):
             ar_terms = np.array([endog_buffer[-lag] for lag in self.lags])
 
-            # combine with exogenous features
-            if exog_future is not None:
-                features = np.concatenate([ar_terms, exog_future[i, :]])
+            if exog_values is not None:
+                features = np.concatenate([ar_terms, exog_values[i, :]])
             else:
                 features = ar_terms
 
-            # make prediction
             pred = self.regressor.predict(features.reshape(1, -1))[0]
             predictions[i] = pred
-
-            # update buffer
-            endog_buffer.append(pred)
+            endog_buffer.appendleft(pred)
 
         return predictions
-    
-    def predict_raw(self, endog_history: np.ndarray, features_future: np.ndarray):
-        raise Exception("This method has not been implemented yet.")
 
     def get_params(self):
         """
         Get model parameters from the underlying regressor.
 
-        Format depends on the regressor used.
+        Returns:
+            coef_: Regression coefficients (numpy array)
+            intercept_: Intercept term (float or numpy array)
         """
-        if hasattr(self.regressor, 'coef_'):
-            return self.regressor.coef_  # sklearn-style regressor
-        elif hasattr(self.regressor, 'get_params'):
-            return self.regressor.get_params()
-        else:
-            return {}
+        if not self._fitted:
+            raise ValueError("Model must be fitted before calling get_params(). Call fit() first.")
+        return self.regressor.coef_, self.regressor.intercept_
 
     def __repr__(self):
         return f"ARXModel(lags={self.lags}, regressor={self.regressor})"

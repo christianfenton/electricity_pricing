@@ -8,7 +8,7 @@ including handling missing periods, duplicates, and DST-related issues.
 import pandas as pd
 import numpy as np
 from typing import Optional
-from .validation import get_expected_periods
+from ..utils import get_expected_periods
 
 def fill_missing_periods(
     df: pd.DataFrame,

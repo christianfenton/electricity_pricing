@@ -24,8 +24,7 @@ This project provides:
 ## Notebooks
 
 - **`exploratory_analysis.ipynb`**: Exploratory data analysis investigating trends, seasonal patterns, and correlations between electricity prices, weather variables, and generation sources.
-- **`model_development.ipynb`**: Development and discussion of models for electricity price forecasting, including feature engineering and model selection.
-- **`example_ARX.ipynb`**: Demonstration of electricity price forecasting models with ARX-style time series models.
+- **`example_forecast.ipynb`**: Demonstration of electricity price forecasting models with autoregressive models.
 
 ## Models
 
@@ -46,7 +45,7 @@ model.fit(X_train, y_train)
 predictions = model.predict(X_test)
 ```
 
-**Using Custom Regressors**
+**Using Different Regressors**
 
 ```python
 from sklearn.linear_model import Ridge
@@ -99,21 +98,3 @@ Met Office (2025): MIDAS Open: UK hourly solar radiation data, v202507. NERC EDS
 - ITSDO: Initial transmission system demand outturn
 
 The AGPT data does not include flows from interconnects, while the FUELHH data does not include energy generation from solar or embedded generation. The AGPT and FUELHH data are merged to get an accurate breakdown of the different energy generation sources.
-
-## API Reference
-
-### Features
-- `is_holiday()`: Create holiday indicator features
-- `is_weekend()`: Create weekend indicator features
-- `add_intercept()`: Add intercept column for linear models
-
-### Evaluation Metrics
-- `rmse()`: Root mean square error
-- `mae()`: Mean absolute error
-- `mape()`: Mean absolute percentage error
-- `r2_score()`: Coefficient of determination
-- `relative_rmse()`: Relative root mean square error
-
-### Utilities
-- `timeshift()`: Shift time-indexed `pandas.DataFrame`s
-- `train_test_split()`: Split time-indexed data into train/test sets

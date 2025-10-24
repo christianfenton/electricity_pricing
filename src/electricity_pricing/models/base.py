@@ -2,25 +2,24 @@
 
 from abc import ABC, abstractmethod
 import numpy as np
+import pandas as pd
+from typing import Optional
 
 
 class ForecastModel(ABC):
     """
-    Thin wrapper providing consistent interface for forecasting models.
-
-    This class provides a minimal abstraction to wrap models from different
-    libraries (scikit-learn, statsmodels, custom implementations) with a
-    consistent interface.
+    Base class for forecasting models.
     """
 
     @abstractmethod
-    def fit(self, X: np.ndarray, y: np.ndarray) -> "ForecastModel":
+    def fit(self, endog: pd.Series, exog: Optional[pd.DataFrame] = None) -> "ForecastModel":
         """
-        Fit model to training data.
+        Fit model parameters to observed data.
 
         Args:
-            X: Feature matrix of shape (n_samples, n_features)
-            y: Target vector of shape (n_samples,)
+            endog: Endogenous variable (target). `pandas.Series` with datetime index.
+            exog: Exogenous variables (features). `pandas.DataFrame` with datetime index.
+                  Default: None.
 
         Returns:
             self: The fitted model
@@ -28,14 +27,35 @@ class ForecastModel(ABC):
         pass
 
     @abstractmethod
-    def predict(self, X: np.ndarray) -> np.ndarray:
+    def forecast(
+        self,
+        steps: int,
+        exog: Optional[pd.DataFrame] = None,
+        endog_history: Optional[pd.Series] = None
+    ) -> np.ndarray:
         """
-        Generate predictions for new data.
+        Make a forecast.
 
         Args:
-            X: Feature matrix of shape (n_samples, n_features)
+            steps: Number of steps to forecast ahead
+            exog: Exogenous variables for forecast horizon.
+                  `pandas.DataFrame` with shape (steps, n_features).
+                  Default: None.
+            endog_history: Historical values of endogenous variable used for autoregressive lags.
+                          If None, uses lag values stored during fit().
+                          If provided, forecasts from this history instead.
+                          Array with shape (max_lag,) or longer.
+                          Default: None.
 
         Returns:
-            predictions: Predicted values of shape (n_samples,)
+            predictions: Forecasted values of shape (steps,)
+
+        Example:
+            # Forecast from end of training data
+            model.fit(y_train, X_train)
+            forecast = model.predict(steps=48, exog=X_future)
+
+            # Forecast from a different starting point
+            forecast = model.predict(steps=48, exog=X_future, endog_history=y_recent)
         """
         pass
