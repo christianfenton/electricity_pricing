@@ -14,8 +14,9 @@ class ARXModel(ForecastModel):
     Autoregressive model with exogenous variables (ARX).
 
     Attributes:
-        lags: List of autoregressive lag indices (e.g., [1] for an order-1 model)
-        regressor: Underlying regression model (default: LinearRegression)
+        lags: List of autoregressive lag indices
+        regressor: Underlying regression model 
+            Defaults to `sklearn.linear_model.LinearRegression`)
     """
 
     def __init__(self, lags: List[int] = [1], regressor=None):
@@ -24,28 +25,41 @@ class ARXModel(ForecastModel):
 
         Args:
             lag: List of autoregressive lag indices. Default: `[1]`.
-            regressor: Scikit-learn compatible regression model. Must implement
-                fit(X, y) and predict(X) methods with coef_ and intercept_
-                attributes. Default: LinearRegression(fit_intercept=True).
+            regressor: Scikit-learn compatible regression model. 
+                Must implement fit(X, y) and predict(X) methods with 
+                coef_ and intercept_ attributes. 
+                Default: LinearRegression(fit_intercept=True).
         """
         self.lags = lags
-        self.regressor = regressor if regressor is not None else LinearRegression(fit_intercept=True)
-        self._fitted = False  # indicate whether parameters have been fitted yet
+        self.regressor = (
+            regressor
+            if regressor is not None
+            else LinearRegression(fit_intercept=True)
+        )
+        self._fitted = (
+            False  # indicate whether parameters have been fitted yet
+        )
 
     def _build_ar_features(self, endog: pd.Series) -> pd.DataFrame:
         """
         Build autoregressive features from the endogenous variable history.
-        Returns a `pandas.DataFrame` with shape (n_samples - max(lags), len(lags)).
+
+        Returns:
+            df: `pd.DataFrame` with shape (n_samples - max(lags), len(lags))
         """
         max_lag = max(self.lags)
 
         if len(endog) <= max_lag:
             raise ValueError(
-                f"Endogenous variable must have more than max(lag)={max_lag} samples, got {len(endog)}."
+                "Endogenous variable must have more than" 
+                +
+                f"max(lag)={max_lag} samples, got {len(endog)}."
             )
 
         # Shift columns for each lag
-        ar_df = pd.DataFrame({f'lag_{lag}': endog.shift(lag) for lag in self.lags})
+        ar_df = pd.DataFrame(
+            {f"lag_{lag}": endog.shift(lag) for lag in self.lags}
+        )
 
         return ar_df.dropna()
 
@@ -57,23 +71,31 @@ class ARXModel(ForecastModel):
         Args:
             endog: Endogenous variable. `pandas.Series` with datetime index.
             exog: Exogenous variables.
-                If provided, should be a `pandas.DataFrame` with datetime index.
+                If provided, a `pandas.DataFrame` with datetime index.
                 Default: None.
         """
-        assert np.all(ptypes.is_datetime64_any_dtype(endog.index)), "endog must have datetime index."
+        assert np.all(ptypes.is_datetime64_any_dtype(endog.index)), (
+            "endog must have datetime index."
+        )
         if exog is not None:
-            assert np.all(ptypes.is_datetime64_any_dtype(exog.index)), "exog must have datetime index."
+            assert np.all(ptypes.is_datetime64_any_dtype(exog.index)), (
+                "exog must have datetime index."
+            )
 
         max_lag = max(self.lags)
 
         if len(endog) <= max_lag:
             raise ValueError(
-                f"Endogenous variable must have more than max(lag)={max_lag} samples, got {len(endog)}."
+                "Endogenous variable must have more than "
+                +
+                f"max(lag)={max_lag} samples, got {len(endog)}."
             )
 
         if exog is not None and len(exog) != len(endog):
             raise ValueError(
-                f"Dimensions in endog ({len(endog)}) and exog ({len(exog)}) do not match."
+                f"Dimensions in endog ({len(endog)}) "
+                +
+                f"and exog ({len(exog)}) do not match."
             )
 
         # Store lag values from end of training data
@@ -82,14 +104,17 @@ class ARXModel(ForecastModel):
         # Build autoregressive features
         ar_features = self._build_ar_features(endog)
 
-        # Create target vector (skip first max_lag rows to align with autoregressive features)
+        # Create target vector 
+        # skip first max_lag rows to align with autoregressive features
         targets = endog.iloc[max_lag:]
 
         # Combine AR features with exogenous variables
         if exog is not None:
             # Skip first max_lag rows of exog to align with AR features
             exog_aligned = exog.iloc[max_lag:].reset_index(drop=True)
-            features = pd.concat([ar_features.reset_index(drop=True), exog_aligned], axis=1)
+            features = pd.concat(
+                [ar_features.reset_index(drop=True), exog_aligned], axis=1
+            )
         else:
             features = ar_features
 
@@ -102,7 +127,7 @@ class ARXModel(ForecastModel):
         self,
         steps: int,
         exog: Optional[pd.DataFrame] = None,
-        endog_history: Optional[pd.Series] = None
+        endog_history: Optional[pd.Series] = None,
     ) -> np.ndarray:
         """
         Make a forecast.
@@ -110,11 +135,11 @@ class ARXModel(ForecastModel):
         Args:
             steps: Number of steps to forecast ahead
             exog: Exogenous variables for forecast horizon.
-                  If provided, should be a `pandas.DataFrame` with shape (steps, n_features).
+                  If provided, a `pd.DataFrame` with shape (steps, n_features).
                   Default: None.
-            endog_history: Historical values of endogenous variable for AR lags used for forecasting.
+            endog_history: Historical values of endogenous variable.
                 If None, uses last lag values stored during fit().
-                If provided, should be a `pandas.Series` with shape (max(lag), ).
+                If provided, a `pandas.Series` with shape (max(lag),).
                 Default: None.
 
         Returns:
@@ -126,29 +151,42 @@ class ARXModel(ForecastModel):
             forecast = model.forecast(steps=48, exog=X_future)
 
             # Forecast from a different starting point
-            forecast = model.forecast(steps=48, exog=X_future, endog_history=y_recent)
+            forecast = model.forecast(
+                steps=48, exog=X_future, endog_history=y_recent
+            )
         """
         if not self._fitted:
-            raise ValueError("Model must be fitted before calling forecast(). Call fit() first.")
+            raise ValueError(
+                "Model must be fitted before calling forecast(). "
+                +
+                "Call fit() first."
+            )
 
         if exog is not None:
-            assert np.all(ptypes.is_datetime64_any_dtype(exog.index)), "exog must have datetime index."
+            assert np.all(ptypes.is_datetime64_any_dtype(exog.index)), (
+                "exog must have datetime index."
+            )
         if endog_history is not None:
-            assert np.all(ptypes.is_datetime64_any_dtype(endog_history.index)), "endog_history must have datetime index."
+            assert np.all(
+                ptypes.is_datetime64_any_dtype(endog_history.index)
+            ), "endog_history must have datetime index."
 
         max_lag = max(self.lags)
 
         if endog_history is None:
-            if not hasattr(self, 'lag_values'):
+            if not hasattr(self, "lag_values"):
                 raise ValueError(
-                    "No lag values stored from fit(). Either fit the model or provide `endog_history`."
+                    "No lag values stored from fit(). "
+                    +
+                    "Either fit the model or provide `endog_history`."
                 )
             endog_buffer_init = self.lag_values.copy()
         else:
             if len(endog_history) < max_lag:
                 raise ValueError(
-                    f"endog_history must contain at least max(lags)={max_lag} values, "
-                    f"got {len(endog_history)}."
+                    "endog_history must contain at least "
+                    +
+                    f"max(lags)={max_lag} values, got {len(endog_history)}."
                 )
             endog_buffer_init = endog_history.iloc[-np.array(self.lags)].values
 
@@ -159,7 +197,9 @@ class ARXModel(ForecastModel):
                 exog_values = exog_values.reshape(-1, 1)
             if exog_values.shape[0] < steps:
                 raise ValueError(
-                    f"exog must have at least {steps} rows, got {exog_values.shape[0]}"
+                    f"exog must have at least {steps} rows, "
+                    +
+                    "got {exog_values.shape[0]}"
                 )
 
         # Make predictions
@@ -188,7 +228,11 @@ class ARXModel(ForecastModel):
             intercept_: Intercept term (float or numpy array)
         """
         if not self._fitted:
-            raise ValueError("Model must be fitted before calling get_params(). Call fit() first.")
+            raise ValueError(
+                "Model must be fitted before calling get_params(). "
+                +
+                "Call fit() first."
+            )
         return self.regressor.coef_, self.regressor.intercept_
 
     def __repr__(self):

@@ -16,8 +16,7 @@ from .cleaning import clean_dataset
 
 
 def load_electricity_data(
-    file_path: str,
-    verbose: bool = False
+    file_path: str, verbose: bool = False
 ) -> pd.DataFrame:
     """
     Load electricity generation and price data from CSV.
@@ -36,7 +35,7 @@ def load_electricity_data(
     date_cols = []
     try:  # Check if file exists and peek at columns
         sample = pd.read_csv(file_path, nrows=0)
-        for col in ['settlementDate', 'SETTLEMENT_DATE', 'startTime']:
+        for col in ["settlementDate", "SETTLEMENT_DATE", "startTime"]:
             if col in sample.columns:
                 date_cols.append(col)
     except Exception as e:
@@ -47,14 +46,14 @@ def load_electricity_data(
     df = pd.read_csv(file_path, parse_dates=date_cols)
 
     # Standardise column names
-    if 'settlementDate' in df.columns:
-        df = df.rename(columns={'settlementDate': 'SETTLEMENT_DATE'})
-    if 'settlementPeriod' in df.columns:
-        df = df.rename(columns={'settlementPeriod': 'SETTLEMENT_PERIOD'})
+    if "settlementDate" in df.columns:
+        df = df.rename(columns={"settlementDate": "SETTLEMENT_DATE"})
+    if "settlementPeriod" in df.columns:
+        df = df.rename(columns={"settlementPeriod": "SETTLEMENT_PERIOD"})
 
     # Drop startTime if present (helps avoid confusion arounds time zones)
-    if 'startTime' in df.columns:
-        df = df.drop(columns=['startTime'])
+    if "startTime" in df.columns:
+        df = df.drop(columns=["startTime"])
 
     if verbose:
         print(f"  Loaded {len(df)} rows with {len(df.columns)} columns")
@@ -66,10 +65,7 @@ def load_electricity_data(
     return df
 
 
-def load_forecast_data(
-    file_path: str,
-    verbose: bool = False
-) -> pd.DataFrame:
+def load_forecast_data(file_path: str, verbose: bool = False) -> pd.DataFrame:
     """
     Load day-ahead forecast data from CSV.
 
@@ -87,7 +83,7 @@ def load_forecast_data(
     date_cols = []
     try:
         sample = pd.read_csv(file_path, nrows=0)
-        for col in ['SETTLEMENT_DATE', 'Forecast_Datetime', 'DATETIME_GMT']:
+        for col in ["SETTLEMENT_DATE", "Forecast_Datetime", "DATETIME_GMT"]:
             if col in sample.columns:
                 date_cols.append(col)
     except Exception as e:
@@ -110,7 +106,7 @@ def merge_electricity_and_forecasts(
     df_electricity: pd.DataFrame,
     df_forecast: pd.DataFrame,
     validate_result: bool = True,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Merge electricity generation/price data with day-ahead forecasts.
@@ -133,9 +129,9 @@ def merge_electricity_and_forecasts(
     df_merged = pd.merge(
         df_electricity,
         df_forecast,
-        on=['SETTLEMENT_DATE', 'SETTLEMENT_PERIOD'],
-        how='inner',
-        suffixes=('_elec', '_forecast')
+        on=["SETTLEMENT_DATE", "SETTLEMENT_PERIOD"],
+        how="inner",
+        suffixes=("_elec", "_forecast"),
     )
 
     if verbose:
@@ -144,7 +140,9 @@ def merge_electricity_and_forecasts(
     if validate_result:
         if verbose:
             print("  Validating merged data...")
-        is_valid, errors = validate_settlement_periods(df_merged, verbose=verbose)
+        is_valid, errors = validate_settlement_periods(
+            df_merged, verbose=verbose
+        )
         if not is_valid and verbose:
             print(f"  Warning: Validation found {len(errors)} issue(s)")
 
@@ -157,7 +155,7 @@ def load_and_merge_datasets(
     date_range: Optional[Tuple[date, date]] = None,
     validate: bool = True,
     output_path: Optional[str] = None,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> pd.DataFrame:
     """
     Load and merge electricity and forecast datasets.
@@ -191,24 +189,23 @@ def load_and_merge_datasets(
             print(f"\nFiltering dates: {start_date} to {end_date}")
 
         for df in [df_electricity, df_forecast]:
-            mask = (df['SETTLEMENT_DATE'].dt.date >= start_date) & (df['SETTLEMENT_DATE'].dt.date <= end_date)
+            mask = (df["SETTLEMENT_DATE"].dt.date >= start_date) & (
+                df["SETTLEMENT_DATE"].dt.date <= end_date
+            )
             df = df[mask].copy()
             if verbose:
                 print(f"  Filtered to {len(df)} rows")
 
-        sdates_elec = df_electricity['SETTLEMENT_DATE'].dt.date
+        sdates_elec = df_electricity["SETTLEMENT_DATE"].dt.date
         mask_elec = (sdates_elec >= start_date) & (sdates_elec <= end_date)
         df_electricity = df_electricity[mask_elec].copy()
 
-        sdates_fc = df_forecast['SETTLEMENT_DATE'].dt.date
+        sdates_fc = df_forecast["SETTLEMENT_DATE"].dt.date
         mask_fc = (sdates_fc >= start_date) & (sdates_fc <= end_date)
         df_forecast = df_forecast[mask_fc].copy()
 
     df_merged = merge_electricity_and_forecasts(
-        df_electricity,
-        df_forecast,
-        validate_result=validate,
-        verbose=verbose
+        df_electricity, df_forecast, validate_result=validate, verbose=verbose
     )
 
     if output_path:
@@ -220,7 +217,11 @@ def load_and_merge_datasets(
 
     if verbose:
         print("\n" + "=" * 80)
-        print(f"Load and merge complete: {len(df_merged)} rows, {len(df_merged.columns)} columns")
+        print(
+            f"Load and merge complete: {len(df_merged)} rows, "
+            +
+            f"{len(df_merged.columns)} columns"
+        )
         print("=" * 80)
 
     return df_merged

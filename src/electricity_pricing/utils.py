@@ -8,7 +8,9 @@ from datetime import date
 from typing import Tuple, Optional
 
 
-def is_holiday(df: pd.DataFrame, date_column: str, country: str = 'GB') -> pd.Series:
+def is_holiday(
+    df: pd.DataFrame, date_column: str, country: str = "GB"
+) -> pd.Series:
     """
     Return a `pandas.Series` indicating which dates are public holidays.
 
@@ -21,7 +23,9 @@ def is_holiday(df: pd.DataFrame, date_column: str, country: str = 'GB') -> pd.Se
         Binary series with 1.0 for holidays, 0.0 otherwise
     """
     country_holidays = holidays.country_holidays(country)
-    return df[date_column].apply(lambda x: 1.0 if x in country_holidays else 0.0)
+    return df[date_column].apply(
+        lambda x: 1.0 if x in country_holidays else 0.0
+    )
 
 
 def is_weekend(df: pd.DataFrame, date_column: str) -> pd.Series:
@@ -46,7 +50,9 @@ def last_sunday_of_month(year: int, month: int) -> date:
         year (int): Year
         month (int): Month
     """
-    last_day = pd.Timestamp(year=year, month=month, day=1) + pd.offsets.MonthEnd(1)
+    last_day = pd.Timestamp(
+        year=year, month=month, day=1
+    ) + pd.offsets.MonthEnd(1)
     days_back = (last_day.dayofweek - 6) % 7  # Sunday is 6
     last_sunday = last_day - pd.Timedelta(days=days_back)
     return last_sunday.date()
@@ -54,7 +60,8 @@ def last_sunday_of_month(year: int, month: int) -> date:
 
 def get_expected_periods(date: pd.Timestamp) -> int:
     """
-    Return the expected number of 30-minute settlement periods for a given date in the UK.
+    Return the expected number of 30-minute settlement periods 
+    for a given date in the UK.
     """
     year = date.year
     spring_dst = last_sunday_of_month(year, 3)
@@ -65,11 +72,13 @@ def get_expected_periods(date: pd.Timestamp) -> int:
         return 50
     else:
         return 48
-    
 
-def add_intercept(df: pd.DataFrame, column_name='intercept', inplace=False) -> pd.DataFrame:
+
+def add_intercept(
+    df: pd.DataFrame, column_name="intercept", inplace=False
+) -> pd.DataFrame:
     """
-    Add a column of ones to a dataframe (useful for linear regression with an intercept).
+    Add a column of ones to a dataframe
 
     Args:
         df: `pandas.DataFrame`
@@ -85,7 +94,9 @@ def add_intercept(df: pd.DataFrame, column_name='intercept', inplace=False) -> p
     return df
 
 
-def timeshift(series: pd.Series, shift: pd.Timedelta, name: Optional[str] = None) -> pd.Series:
+def timeshift(
+    series: pd.Series, shift: pd.Timedelta, name: Optional[str] = None
+) -> pd.Series:
     """
     Shift a timestamp-indexed series by an amount of time `shift`.
 
@@ -99,16 +110,16 @@ def timeshift(series: pd.Series, shift: pd.Timedelta, name: Optional[str] = None
 
     Returns:
         shifted_series: Series shifted by the specified timedelta
-
-    Example:
-        >>> # Shift price data back by 1 day
-        >>> lagged_price = shift_series(df['price'], pd.Timedelta(days=-1), 'price_lag_1d')
     """
-    assert np.all(ptypes.is_datetime64_any_dtype(series.index)), "Expected datetime type as index."
+    assert np.all(ptypes.is_datetime64_any_dtype(series.index)), (
+        "Expected datetime type as index."
+    )
     inds = series.index
     inds_shifted = inds + shift
     lookup = series.to_dict()
-    series_shifted = pd.Series([lookup.get(i, np.nan) for i in inds_shifted], index=inds, name=name)
+    series_shifted = pd.Series(
+        [lookup.get(i, np.nan) for i in inds_shifted], index=inds, name=name
+    )
     return series_shifted
 
 
@@ -116,7 +127,7 @@ def create_timestamps(
     df: pd.DataFrame,
     date_column: str,
     period_column: str,
-    tz: str = 'Europe/London'
+    tz: str = "Europe/London",
 ) -> pd.Series:
     """
     Create timezone-aware timestamps from settlement dates and periods.
@@ -131,9 +142,9 @@ def create_timestamps(
         `pandas.Series`
     """
     base_timestamps = pd.to_datetime(df[date_column]).dt.tz_localize(tz)
-    period_offsets = pd.to_timedelta((df[period_column] - 1) * 30, unit='m')
+    period_offsets = pd.to_timedelta((df[period_column] - 1) * 30, unit="m")
     timestamps = base_timestamps + period_offsets
-    return pd.Series(timestamps, index=df.index, name='DATETIME')
+    return pd.Series(timestamps, index=df.index, name="DATETIME")
 
 
 def validate_timestamps(
@@ -141,7 +152,7 @@ def validate_timestamps(
     datetime_column: str,
     date_column: str,
     period_column: str,
-    tz: str = 'Europe/London'
+    tz: str = "Europe/London",
 ) -> bool:
     """
     Validate that timestamps match the (date, period) representation.
@@ -157,7 +168,7 @@ def validate_timestamps(
         df[[date_column, period_column]],
         date_column=date_column,
         period_column=period_column,
-        tz=tz
+        tz=tz,
     )
 
     if datetime_column in df.columns:
@@ -182,28 +193,25 @@ def validate_timestamps(
 def train_test_split(
     df: pd.DataFrame | pd.Series,
     train_range: pd.DatetimeIndex,
-    test_range: pd.DatetimeIndex
+    test_range: pd.DatetimeIndex,
 ) -> Tuple[pd.DataFrame | pd.Series, pd.DataFrame | pd.Series]:
     """
     Split a time-indexed dataset into training and test sets.
 
     Args:
         df: `pandas.DataFrame` or `pandas.Series` with timestamps as indices
-        train_range: DatetimeIndex specifying training timestamps (from pd.date_range)
-        test_range: DatetimeIndex specifying test timestamps (from pd.date_range)
+        train_range: DatetimeIndex specifying training timestamps.
+            Create this using `pandas.date_range`.
+        test_range: DatetimeIndex specifying test timestamps.
+            Create this using `pandas.date_range`.
 
     Returns:
         df_train: Training set
         df_test: Test set
-
-    Example:
-        >>> train_range = pd.date_range("2021-01-01", "2024-01-02",
-        ...                             freq="30min", tz="Europe/London", inclusive="left")
-        >>> test_range = pd.date_range("2024-01-02", "2024-01-03",
-        ...                            freq="30min", tz="Europe/London", inclusive="left")
-        >>> X_train, X_test = train_test_split(features, train_range, test_range)
     """
-    assert np.all(ptypes.is_datetime64_any_dtype(df.index)), "Expected datetime type as index."
+    assert np.all(ptypes.is_datetime64_any_dtype(df.index)), (
+        "Expected datetime type as index."
+    )
     df_train = df[df.index.isin(train_range)].copy()
     df_test = df[df.index.isin(test_range)].copy()
     return df_train, df_test

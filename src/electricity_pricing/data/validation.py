@@ -11,9 +11,8 @@ from ..utils import get_expected_periods, last_sunday_of_month
 
 
 def find_irregular_days(
-        df: pd.DataFrame, 
-        date_column: str = 'SETTLEMENT_DATE'
-        ) -> List[Tuple[pd.Timestamp, int, int]]:
+    df: pd.DataFrame, date_column: str = "SETTLEMENT_DATE"
+) -> List[Tuple[pd.Timestamp, int, int]]:
     """
     Find days with an unexpected number of settlement periods.
 
@@ -36,9 +35,8 @@ def find_irregular_days(
 
 
 def validate_day_lengths(
-        df: pd.DataFrame, 
-        date_column: str = 'SETTLEMENT_DATE'
-        ) -> Tuple[bool, List[Tuple[pd.Timestamp, int, int]]]:
+    df: pd.DataFrame, date_column: str = "SETTLEMENT_DATE"
+) -> Tuple[bool, List[Tuple[pd.Timestamp, int, int]]]:
     """
     Validate that all days have the correct number of settlement periods.
 
@@ -55,14 +53,13 @@ def validate_day_lengths(
 
 
 def validate_spring_dst(
-    df: pd.DataFrame,
-    date_column: str = 'SETTLEMENT_DATE'
+    df: pd.DataFrame, date_column: str = "SETTLEMENT_DATE"
 ) -> Tuple[bool, str]:
     """
     Validate that spring DST days (46 periods) occur on the correct dates.
 
-    Only validates if the data spans into March. If there are no days with 46 periods,
-    validation passes (data might not include DST dates).
+    Only validates if the data spans into March. 
+    If there are no days with 46 periods, validation passes.
 
     Args:
         df: DataFrame with settlement period data
@@ -88,22 +85,29 @@ def validate_spring_dst(
     years_with_march = sorted(years_with_march)
 
     if len(years_with_march) != len(short_days):
-        msg = f"Expected one short day (46 periods) per year with March data, found {len(short_days)} for {len(years_with_march)} years"
+        msg = (
+            "Expected one short day (46 periods) per year with March data, " 
+            + 
+            f"found {len(short_days)} for {len(years_with_march)} years"
+        )
         return False, msg
 
     for i, year in enumerate(years_with_march):
         expected_date = last_sunday_of_month(year, 3)
         actual_date = short_days[i].date()
         if actual_date != expected_date:
-            msg = f"Spring DST in year {year}: expected {expected_date}, got {actual_date}"
+            msg = (
+                f"Spring DST in year {year}: expected {expected_date}, "
+                + 
+                f"got {actual_date}"
+            )
             return False, msg
 
     return True, ""
 
 
 def validate_autumn_dst(
-    df: pd.DataFrame,
-    date_column: str = 'SETTLEMENT_DATE'
+    df: pd.DataFrame, date_column: str = "SETTLEMENT_DATE"
 ) -> Tuple[bool, str]:
     """
     Validate that autumn DST days (50 periods) occur on the correct dates.
@@ -128,21 +132,31 @@ def validate_autumn_dst(
     years_in_data = df[date_column].dt.year.unique()
     years_with_october = []
     for year in years_in_data:
-        october_dates = df[df[date_column].dt.year == year][date_column].dt.month
+        october_dates = df[df[date_column].dt.year == year][
+            date_column
+        ].dt.month
         if 10 in october_dates.values:
             years_with_october.append(year)
 
     years_with_october = sorted(years_with_october)
 
     if len(years_with_october) != len(long_days):
-        msg = f"Expected one long day (50 periods) per year with October data, found {len(long_days)} for {len(years_with_october)} years"
+        msg = (
+            "Expected one long day (50 periods) per year with October data, "
+            +
+            f"found {len(long_days)} for {len(years_with_october)} years"
+        )
         return False, msg
 
     for i, year in enumerate(years_with_october):
         expected_date = last_sunday_of_month(year, 10)
         actual_date = long_days[i].date()
         if actual_date != expected_date:
-            msg = f"Autumn DST in year {year}: expected {expected_date}, got {actual_date}"
+            msg = (
+                f"Autumn DST in year {year}: expected {expected_date}, "
+                +
+                f"got {actual_date}"
+            )
             return False, msg
 
     return True, ""
@@ -150,9 +164,9 @@ def validate_autumn_dst(
 
 def validate_settlement_periods(
     df: pd.DataFrame,
-    date_column: str = 'SETTLEMENT_DATE',
-    period_column: str = 'SETTLEMENT_PERIOD',
-    verbose: bool = False
+    date_column: str = "SETTLEMENT_DATE",
+    period_column: str = "SETTLEMENT_PERIOD",
+    verbose: bool = False,
 ) -> Tuple[bool, List[str]]:
     """
     Validate that the data has the expected settlement date and periods.
@@ -179,15 +193,21 @@ def validate_settlement_periods(
     duplicates = df.duplicated(subset=[date_column, period_column], keep=False)
     if duplicates.any():
         n_duplicates = duplicates.sum()
-        errors.append(f"Found {n_duplicates} duplicate (date, period) combinations")
+        errors.append(
+            f"Found {n_duplicates} duplicate (date, period) combinations"
+        )
 
     # Check day lengths
     is_valid_lengths, irregular_days = validate_day_lengths(df, date_column)
     if not is_valid_lengths:
-        errors.append(f"Found {len(irregular_days)} days with incorrect number of periods")
+        errors.append(
+            f"Found {len(irregular_days)} days with incorrect number of periods"
+        )
         if verbose:
             for date, actual, expected in irregular_days[:5]:  # Show first 5
-                errors.append(f"  - {date.date()}: {actual} periods (expected {expected})")
+                errors.append(
+                    f"  - {date.date()}: {actual} periods (expected {expected})"
+                )
 
     # Check spring DST
     is_valid_spring, spring_msg = validate_spring_dst(df, date_column)

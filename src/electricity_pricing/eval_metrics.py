@@ -82,7 +82,7 @@ def mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 def r2_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
-    Return the coefficient of determination between a set of predictions and ground truths.
+    The correlation coefficient between a set of predictions and ground truths.
 
     Args:
         y_true: True values

@@ -43,51 +43,67 @@ def collect_agpt_data(start_date, end_date, verbose=False):
         params = {
             "publishDateTimeFrom": current_start.strftime("%Y-%m-%d 00:00"),
             "publishDateTimeTo": current_end.strftime("%Y-%m-%d 01:00"),
-            "format": "json"
+            "format": "json",
         }
 
         if verbose:
-            print(f"Fetching AGPT data from {params['publishDateTimeFrom']} to {params['publishDateTimeTo']}...")
+            print(
+                f"Fetching AGPT data from {params['publishDateTimeFrom']} "
+                +
+                f"to {params['publishDateTimeTo']}..."
+            )
 
         response = requests.get(url, params=params)
 
         if response.ok:
             data = response.json()
-            all_data.extend(data['data'])
+            all_data.extend(data["data"])
         else:
             print(f"Error: {response.status_code} {response.text}")
 
         current_start = current_end
 
     df = pd.DataFrame(all_data)
-    df['startTime'] = pd.to_datetime(df['startTime'])
+    df["startTime"] = pd.to_datetime(df["startTime"])
 
     df_AGPT = df.pivot_table(
-        index=['settlementDate', 'settlementPeriod', 'startTime'],
-        columns='psrType',
-        values='quantity',
-        aggfunc='first'
+        index=["settlementDate", "settlementPeriod", "startTime"],
+        columns="psrType",
+        values="quantity",
+        aggfunc="first",
     ).reset_index()
 
-    df_AGPT = df_AGPT.sort_values(['settlementDate', 'settlementPeriod']).reset_index(drop=True)
+    df_AGPT = df_AGPT.sort_values(
+        ["settlementDate", "settlementPeriod"]
+    ).reset_index(drop=True)
 
     # Group wind types
-    df_AGPT['WIND'] = df_AGPT[['Wind Offshore', 'Wind Onshore']].sum(axis=1)
-    df_AGPT = df_AGPT.drop(columns=['Wind Offshore', 'Wind Onshore'])
+    df_AGPT["WIND"] = df_AGPT[["Wind Offshore", "Wind Onshore"]].sum(axis=1)
+    df_AGPT = df_AGPT.drop(columns=["Wind Offshore", "Wind Onshore"])
 
     # Group hydro and other
-    df_AGPT['OTHER'] = df_AGPT[['Hydro Pumped Storage', 'Hydro Run-of-river and poundage', 'Other']].sum(axis=1)
-    df_AGPT = df_AGPT.drop(columns=['Hydro Pumped Storage', 'Hydro Run-of-river and poundage', 'Other'])
+    df_AGPT["OTHER"] = df_AGPT[
+        ["Hydro Pumped Storage", "Hydro Run-of-river and poundage", "Other"]
+    ].sum(axis=1)
+    df_AGPT = df_AGPT.drop(
+        columns=[
+            "Hydro Pumped Storage",
+            "Hydro Run-of-river and poundage",
+            "Other",
+        ]
+    )
 
     # Rename columns
-    df_AGPT = df_AGPT.rename(columns={
-        "Nuclear": "NUCLEAR",
-        "Biomass": "BIOMASS",
-        "Fossil Gas": "GAS",
-        "Fossil Oil": "OIL",
-        "Fossil Hard coal": "COAL",
-        "Solar": "SOLAR"
-    })
+    df_AGPT = df_AGPT.rename(
+        columns={
+            "Nuclear": "NUCLEAR",
+            "Biomass": "BIOMASS",
+            "Fossil Gas": "GAS",
+            "Fossil Oil": "OIL",
+            "Fossil Hard coal": "COAL",
+            "Solar": "SOLAR",
+        }
+    )
 
     return df_AGPT
 
@@ -119,47 +135,53 @@ def collect_fuelhh_data(start_date, end_date, verbose=False):
         params = {
             "publishDateTimeFrom": current_start.strftime("%Y-%m-%d 00:00"),
             "publishDateTimeTo": current_end.strftime("%Y-%m-%d 01:00"),
-            "format": "json"
+            "format": "json",
         }
 
         if verbose:
-            print(f"Fetching FUELHH data from {params['publishDateTimeFrom']} to {params['publishDateTimeTo']}...")
+            print(
+                f"Fetching FUELHH data from {params['publishDateTimeFrom']} "
+                +
+                f"to {params['publishDateTimeTo']}..."
+            )
 
         response = requests.get(url, params=params)
 
         if response.ok:
             data = response.json()
-            all_data.extend(data['data'])
+            all_data.extend(data["data"])
         else:
             print(f"Error: {response.status_code} {response.text}")
 
         current_start = current_end
 
     df = pd.DataFrame(all_data)
-    df['startTime'] = pd.to_datetime(df['startTime'])
+    df["startTime"] = pd.to_datetime(df["startTime"])
 
     df_FUELHH = df.pivot_table(
-        index=['settlementDate', 'settlementPeriod', 'startTime'],
-        columns='fuelType',
-        values='generation',
-        aggfunc='first'
+        index=["settlementDate", "settlementPeriod", "startTime"],
+        columns="fuelType",
+        values="generation",
+        aggfunc="first",
     ).reset_index()
 
-    df_FUELHH = df_FUELHH.sort_values(['settlementDate', 'settlementPeriod']).reset_index(drop=True)
+    df_FUELHH = df_FUELHH.sort_values(
+        ["settlementDate", "settlementPeriod"]
+    ).reset_index(drop=True)
 
     # Group gas categories
-    df_FUELHH['GAS'] = df_FUELHH[['OCGT', 'CCGT']].sum(axis=1)
-    df_FUELHH = df_FUELHH.drop(columns=['OCGT', 'CCGT'])
+    df_FUELHH["GAS"] = df_FUELHH[["OCGT", "CCGT"]].sum(axis=1)
+    df_FUELHH = df_FUELHH.drop(columns=["OCGT", "CCGT"])
 
     # Group interconnectors
-    interconnects = df_FUELHH.filter(regex='^INT')
+    interconnects = df_FUELHH.filter(regex="^INT")
     total_interconnect = interconnects.sum(axis=1)
-    df_FUELHH = df_FUELHH.filter(regex='^(?!INT)')
-    df_FUELHH['INTER'] = total_interconnect
+    df_FUELHH = df_FUELHH.filter(regex="^(?!INT)")
+    df_FUELHH["INTER"] = total_interconnect
 
     # Group pumped storage, non-pumped hydro and other
-    df_FUELHH['OTHER'] = df_FUELHH[['OTHER', 'PS', 'NPSHYD']].sum(axis=1)
-    df_FUELHH = df_FUELHH.drop(columns=['PS', 'NPSHYD'])
+    df_FUELHH["OTHER"] = df_FUELHH[["OTHER", "PS", "NPSHYD"]].sum(axis=1)
+    df_FUELHH = df_FUELHH.drop(columns=["PS", "NPSHYD"])
 
     return df_FUELHH
 
@@ -192,36 +214,47 @@ def collect_demand_data(start_date, end_date, verbose=False):
             "settlementDateFrom": current_start.strftime("%Y-%m-%d"),
             "settlementDateTo": current_end.strftime("%Y-%m-%d"),
             "settlementPeriod": np.arange(1, 50).tolist(),
-            "format": "json"
+            "format": "json",
         }
 
         if verbose:
-            print(f"Fetching demand data from {params['settlementDateFrom']} to {params['settlementDateTo']}...")
+            print(
+                f"Fetching demand data from {params['settlementDateFrom']} "
+                +
+                f"to {params['settlementDateTo']}..."
+            )
 
         response = requests.get(url, params=params)
 
         if response.ok:
             data = response.json()
-            all_data.extend(data['data'])
+            all_data.extend(data["data"])
         else:
             print(f"Error: {response.status_code} {response.text}")
 
         current_start = current_end
 
     df = pd.DataFrame(all_data)
-    df['startTime'] = pd.to_datetime(df['startTime'])
+    df["startTime"] = pd.to_datetime(df["startTime"])
 
     df_demand = df.pivot_table(
-        index=['settlementDate', 'settlementPeriod', 'startTime'],
-        values=['initialDemandOutturn', 'initialTransmissionSystemDemandOutturn']
+        index=["settlementDate", "settlementPeriod", "startTime"],
+        values=[
+            "initialDemandOutturn",
+            "initialTransmissionSystemDemandOutturn",
+        ],
     ).reset_index()
 
-    df_demand = df_demand.sort_values(['settlementDate', 'settlementPeriod']).reset_index(drop=True)
+    df_demand = df_demand.sort_values(
+        ["settlementDate", "settlementPeriod"]
+    ).reset_index(drop=True)
 
-    df_demand = df_demand.rename(columns={
-        "initialDemandOutturn": "INDO",
-        "initialTransmissionSystemDemandOutturn": "ITSO"
-    })
+    df_demand = df_demand.rename(
+        columns={
+            "initialDemandOutturn": "INDO",
+            "initialTransmissionSystemDemandOutturn": "ITSO",
+        }
+    )
 
     return df_demand
 
@@ -239,7 +272,9 @@ def collect_mip_data(start_date, end_date, verbose=False):
     Returns:
         DataFrame with price and volume data
     """
-    url = "https://data.elexon.co.uk/bmrs/api/v1/balancing/pricing/market-index"
+    url = (
+        "https://data.elexon.co.uk/bmrs/api/v1/balancing/pricing/market-index"
+    )
 
     start = datetime.strptime(start_date, "%Y-%m-%d")
     end = datetime.strptime(end_date, "%Y-%m-%d")
@@ -254,33 +289,43 @@ def collect_mip_data(start_date, end_date, verbose=False):
             "from": current_start.strftime("%Y-%m-%d 00:00"),
             "to": current_end.strftime("%Y-%m-%d 00:00"),
             "dataProviders": ["APX"],
-            "format": "json"
+            "format": "json",
         }
 
         if verbose:
-            print(f"Fetching price data from {params['from']} to {params['to']}...")
+            print(
+                f"Fetching price data from {params['from']} to {params['to']}..."
+            )
 
         response = requests.get(url, params=params)
 
         if response.ok:
             data = response.json()
-            all_data.extend(data['data'])
+            all_data.extend(data["data"])
         else:
             print(f"Error: {response.status_code} {response.text}")
 
         current_start = current_end
 
     df = pd.DataFrame(all_data)
-    df['startTime'] = pd.to_datetime(df['startTime'])
+    df["startTime"] = pd.to_datetime(df["startTime"])
 
     df_price = df.pivot_table(
-        index=['settlementDate', 'settlementPeriod', 'startTime'],
-        values=['price', 'volume']
+        index=["settlementDate", "settlementPeriod", "startTime"],
+        values=["price", "volume"],
     ).reset_index()
 
-    df_price = df_price.sort_values(['settlementDate', 'settlementPeriod']).reset_index(drop=True)
+    df_price = df_price.sort_values(
+        ["settlementDate", "settlementPeriod"]
+    ).reset_index(drop=True)
 
-    df_price.rename(columns={'price': 'marketIndexPrice', 'volume': 'marketIndexTradingVolume'}, inplace=True)
+    df_price.rename(
+        columns={
+            "price": "marketIndexPrice",
+            "volume": "marketIndexTradingVolume",
+        },
+        inplace=True,
+    )
 
     return df_price
 
@@ -300,21 +345,23 @@ def collect_gas_price_data(start_date, end_date, path_to_file):
     Returns:
         DataFrame with settlementDate and naturalGasPrice columns
     """
-    df = pd.read_excel(path_to_file, sheet_name="Table 1 Daily SAP of Gas", header=5)
+    df = pd.read_excel(
+        path_to_file, sheet_name="Table 1 Daily SAP of Gas", header=5
+    )
 
     # Filter date range and drop unnecessary columns
-    df.drop(columns='SAP seven-day rolling average', inplace=True)
-    df = df.loc[(df['Date'] >= start_date) & (df['Date'] <= end_date)].copy()
+    df.drop(columns="SAP seven-day rolling average", inplace=True)
+    df = df.loc[(df["Date"] >= start_date) & (df["Date"] <= end_date)].copy()
 
     # Convert price units from p/kWh to £/MWh
     PENCE_TO_POUNDS = 1 / 100
     KWH_TO_MWH = 1000
-    df['naturalGasPrice'] = df['SAP actual day'] * PENCE_TO_POUNDS * KWH_TO_MWH
+    df["naturalGasPrice"] = df["SAP actual day"] * PENCE_TO_POUNDS * KWH_TO_MWH
 
     # Convert Date to settlementDate format (string YYYY-MM-DD)
-    df['settlementDate'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
+    df["settlementDate"] = pd.to_datetime(df["Date"]).dt.strftime("%Y-%m-%d")
 
-    return df[['settlementDate', 'naturalGasPrice']]
+    return df[["settlementDate", "naturalGasPrice"]]
 
 
 def collect_weather_data(data_dir, locations=None, years=None):
@@ -358,7 +405,9 @@ def collect_weather_data(data_dir, locations=None, years=None):
         dfs_location = []
 
         for year in years:
-            weather_path = os.path.join(weather_dir, f"hourly_weather_{location}_{year}.csv")
+            weather_path = os.path.join(
+                weather_dir, f"hourly_weather_{location}_{year}.csv"
+            )
 
             if not os.path.exists(weather_path):
                 print(f"Warning: Weather data not found for {location} {year}")
@@ -366,36 +415,52 @@ def collect_weather_data(data_dir, locations=None, years=None):
 
             print(f"Processing {location} {year}...")
             df_hw = pd.read_csv(weather_path, header=283, low_memory=False)
-            df_hw = df_hw[['ob_time', 'wind_speed_unit_id', 'wind_speed', 'wind_direction',
-                           'visibility', 'air_temperature']]
+            df_hw = df_hw[
+                [
+                    "ob_time",
+                    "wind_speed_unit_id",
+                    "wind_speed",
+                    "wind_direction",
+                    "visibility",
+                    "air_temperature",
+                ]
+            ]
 
             # Convert wind speed to m/s
-            is_mps = df_hw['wind_speed_unit_id'].isin([0, 1])
-            df_hw['wind_speed'] = df_hw['wind_speed'] * (is_mps + ~is_mps * KNOT_TO_MS)
-            df_hw.drop(columns='wind_speed_unit_id', inplace=True)
+            is_mps = df_hw["wind_speed_unit_id"].isin([0, 1])
+            df_hw["wind_speed"] = df_hw["wind_speed"] * (
+                is_mps + ~is_mps * KNOT_TO_MS
+            )
+            df_hw.drop(columns="wind_speed_unit_id", inplace=True)
 
             # Clean up data
             df_hw = df_hw.iloc[:-1]  # Drop last row ('end of data' line)
-            df_hw['ob_time'] = pd.to_datetime(df_hw['ob_time'])
+            df_hw["ob_time"] = pd.to_datetime(df_hw["ob_time"])
 
             # Load solar irradiation data if available
-            irradiation_path = os.path.join(irradiation_dir, f"solar_irradiation_{location}_{year}.csv")
+            irradiation_path = os.path.join(
+                irradiation_dir, f"solar_irradiation_{location}_{year}.csv"
+            )
             if os.path.exists(irradiation_path):
-                df_rad = pd.read_csv(irradiation_path, header=78, low_memory=False)
-                df_rad = df_rad[['ob_end_time', 'glbl_irad_amt']].iloc[:-1]
-                df_rad['ob_time'] = pd.to_datetime(df_rad['ob_end_time'])
-                df_rad.drop(columns='ob_end_time', inplace=True)
-                df_merged = df_hw.merge(df_rad, on='ob_time', how='left')
+                df_rad = pd.read_csv(
+                    irradiation_path, header=78, low_memory=False
+                )
+                df_rad = df_rad[["ob_end_time", "glbl_irad_amt"]].iloc[:-1]
+                df_rad["ob_time"] = pd.to_datetime(df_rad["ob_end_time"])
+                df_rad.drop(columns="ob_end_time", inplace=True)
+                df_merged = df_hw.merge(df_rad, on="ob_time", how="left")
             else:
-                print(f"Warning: No radiation data found for {location} {year}")
-                df_hw['glbl_irad_amt'] = np.nan
+                print(
+                    f"Warning: No radiation data found for {location} {year}"
+                )
+                df_hw["glbl_irad_amt"] = np.nan
                 df_merged = df_hw
 
             dfs_location.append(df_merged)
 
         if dfs_location:
             df_location = pd.concat(dfs_location, ignore_index=True)
-            df_location['location'] = location.capitalize()
+            df_location["location"] = location.capitalize()
             dfs.append(df_location)
 
     if not dfs:

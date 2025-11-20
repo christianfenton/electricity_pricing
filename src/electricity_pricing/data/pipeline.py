@@ -11,13 +11,15 @@ from .collectors import (
     collect_demand_data,
     collect_mip_data,
     collect_gas_price_data,
-    collect_weather_data
+    collect_weather_data,
 )
 
 
-def create_electricity_dataset(start_date, end_date, gas_price_path, output_path=None, verbose=False):
+def create_electricity_dataset(
+    start_date, end_date, gas_price_path, output_path=None, verbose=False
+):
     """
-    Create merged electricity dataset combining generation, demand, and pricing data.
+    Create merged electricity dataset with generation, demand, and pricing data.
 
     Args:
         start_date: Start date as string (YYYY-MM-DD)
@@ -41,45 +43,57 @@ def create_electricity_dataset(start_date, end_date, gas_price_path, output_path
     # Merge generation datasets (AGPT with interconnector from FUELHH)
     print("\nMerging generation datasets...") if verbose else None
     df_generation = df_agpt.merge(
-        df_fuelhh[['settlementDate', 'settlementPeriod', 'INTER']],
-        on=['settlementDate', 'settlementPeriod'],
-        how='inner'
+        df_fuelhh[["settlementDate", "settlementPeriod", "INTER"]],
+        on=["settlementDate", "settlementPeriod"],
+        how="inner",
     )
 
     # Merge with demand data
     print("Merging with demand data...") if verbose else None
     df_merged = df_generation.merge(
-        df_demand[['settlementDate', 'settlementPeriod', 'INDO', 'ITSO']],
-        on=['settlementDate', 'settlementPeriod'],
-        how='inner'
+        df_demand[["settlementDate", "settlementPeriod", "INDO", "ITSO"]],
+        on=["settlementDate", "settlementPeriod"],
+        how="inner",
     )
 
     # Merge with MIP data
     print("Merging with market index price data...") if verbose else None
     df_merged = df_merged.merge(
-        df_mip[['settlementDate', 'settlementPeriod', 'marketIndexPrice', 'marketIndexTradingVolume']],
-        on=['settlementDate', 'settlementPeriod'],
-        how='inner'
+        df_mip[
+            [
+                "settlementDate",
+                "settlementPeriod",
+                "marketIndexPrice",
+                "marketIndexTradingVolume",
+            ]
+        ],
+        on=["settlementDate", "settlementPeriod"],
+        how="inner",
     )
 
-    # Merge with gas price data (broadcasts daily price to all settlement periods)
+    # Merge with gas price data 
+    # broadcasts daily price to all settlement periods
     print("Merging with gas price data...") if verbose else None
     df_merged = df_merged.merge(
-        df_gas_price[['settlementDate', 'naturalGasPrice']],
-        on='settlementDate',
-        how='left'
+        df_gas_price[["settlementDate", "naturalGasPrice"]],
+        on="settlementDate",
+        how="left",
     )
 
     # Save to disk if path provided
     if output_path:
-        print(f"\nSaving merged electricity data to {output_path}...") if verbose else None
+        print(
+            f"\nSaving merged electricity data to {output_path}..."
+        ) if verbose else None
         df_merged.to_csv(output_path, index=False)
         print(f"Saved {len(df_merged)} records") if verbose else None
 
     return df_merged
 
 
-def create_weather_dataset(data_dir, output_path=None, locations=None, years=None, verbose=False):
+def create_weather_dataset(
+    data_dir, output_path=None, locations=None, years=None, verbose=False
+):
     """
     Create weather dataset from Met Office data files.
 
@@ -95,11 +109,15 @@ def create_weather_dataset(data_dir, output_path=None, locations=None, years=Non
     """
     print("\n=== Processing Weather Data ===") if verbose else None
 
-    df_weather = collect_weather_data(data_dir, locations=locations, years=years)
+    df_weather = collect_weather_data(
+        data_dir, locations=locations, years=years
+    )
 
     # Save to disk if path provided
     if output_path:
-        print(f"\nSaving weather data to {output_path}...") if verbose else None
+        print(
+            f"\nSaving weather data to {output_path}..."
+        ) if verbose else None
         df_weather.to_csv(output_path, index=False)
         print(f"Saved {len(df_weather)} records") if verbose else None
 
