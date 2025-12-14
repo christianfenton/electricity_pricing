@@ -1,7 +1,6 @@
-"""Evaluation metrics for time series forecasting models."""
+"""Evaluation metrics for forecasting models."""
 
 import numpy as np
-from typing import Dict
 
 
 def rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -42,7 +41,7 @@ def relative_rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return np.sqrt(np.mean(err2 / denom))
 
 
-def mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+def mae(y_true: np.ndarray, y_pred: np.ndarray):
     """
     Calculate mean absolute error (MAE).
 
@@ -56,7 +55,7 @@ def mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return np.mean(np.abs(y_pred - y_true))
 
 
-def mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+def mape(y_true: np.ndarray, y_pred: np.ndarray):
     """
     Calculate mean absolute percentage error (MAPE).
 
@@ -80,7 +79,7 @@ def mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return np.mean(np.abs(err / denom)) * 100
 
 
-def r2_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+def r2_score(y_true: np.ndarray, y_pred: np.ndarray):
     """
     The correlation coefficient between a set of predictions and ground truths.
 
@@ -90,4 +89,4 @@ def r2_score(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
     sum_e = np.sum((y_true - y_pred)**2)
     sum_s = np.sum((y_true - np.mean(y_true))**2)
-    return 1 - sum_e / sum_s
+    return 1.0 - sum_e / sum_s

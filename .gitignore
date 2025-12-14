@@ -1,9 +1,11 @@
 venv/
 .venv/
-data/raw/
+
 .ipynb_checkpoints/
 */.ipynb_checkpoints/
+
 *__pycache__/
+
 .pytest_cache/
-poetry.lock
-dev/model_sandbox.ipynb
+
+data/raw/

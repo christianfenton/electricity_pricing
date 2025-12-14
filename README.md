@@ -3,89 +3,57 @@
 The aim of this project is to explore methods of forecasting electricity 
 prices in Great Britain (GB) on the day-ahead power markets.
 
+## About GB electricity markets
+
 Day-ahead electricity prices in Great Britain are determined through 
 auctions where buyers and sellers agree on prices for specific delivery 
 periods. Most short-term energy trades in GB occur for hourly and 
 half-hourly settlement periods on day-ahead auctions.
 
+## Project overview
+
+- `analysis/`: Exploratory data analysis
+- `models/`: Forecasting models
+- `utilities/`: Utilities for data processing, feature creation, etc.
+- `data/`: Raw and processed data, along with data processing scripts
+
 ## Installation
 
-Clone the repository and install dependencies using Poetry by running
-
+This project's dependencies can be installed by running
 ```bash
-cd electricity_pricing
-poetry install
+pip install -r requirements.txt
 ```
 
-## Overview
+## Data
 
-Scripts for collecting data from public APIs and locally stored CSV files:
-- `scripts/collect_bmrs_data.py`
-- `scripts/collect_gas_prices.py`
-- `scripts/collect_neso_forecasts.py`
-- `scripts/collect_weather_data.py`
+### ETL pipeline
+
+The data is collected and processed with the following scripts:
+- `data/scripts/collect_bmrs_data.py`
+- `data/scripts/collect_gas_prices.py`
+- `data/scripts/collect_neso_forecasts.py`
+- `data/scripts/collect_weather_data.py`
+
 The data resulting from running these scripts is stored in `data/processed/`
-
-Notebooks for exploratory analysis and forecasting examples:
-- `notebooks/exploratory_analysis.py`
-- `notebooks/example_forecast.py`
-
-Forecasting models:
-- `electricity_pricing.models`
-
-## Models
-
-### `ARXModel`
-
-Autoregressive model with exogenous variables (ARX). 
-Models electricity prices as a linear combination of autoregressive terms 
-(lagged prices) and exogenous variables (e.g. forecasted demand, weather).
-
-**Basic Usage**
-
-```python
-from electricity_pricing.models import ARXModel
-
-# Create and train model with default linear regression
-model = ARXModel()
-model.fit(X_train, y_train)
-
-# Generate predictions
-predictions = model.predict(X_test)
-```
-
-**Using Different Regressors**
-
-```python
-from sklearn.linear_model import Ridge
-
-# ARX with Ridge regularisation
-ridge_model = ARXModel(regressor=Ridge(alpha=1.0))
-ridge_model.fit(X_train, y_train)
-```
-
-## Data Details
 
 Processed weather and electricity price data is already available in 
 this repository's `data/processed/` directory.
 
 Users that want to process raw data themselves can download the relevant data, 
-update the paths in the data collection scripts and run the data scripts.
+update the paths in the data collection scripts and run the required scripts.
 
-### Data Sources
+### Citations
 
-Actual historical data and forecasted data on electricity price, demand 
-and generation are sourced from the [Elexon BMRS API](https://bmrs.elexon.co.uk) 
-and the [National Energy System Operator's data portal](https://www.neso.energy/data-portal).
+Electricity price, demand and generation data are sourced from the 
+[Elexon BMRS API](https://bmrs.elexon.co.uk) and the 
+[National Energy System Operator's data portal](https://www.neso.energy/data-portal).
 
-Natural gas prices are sourced from the [Office for National Statistics](https://www.ons.gov.uk/economy/economicoutputandproductivity/output/datasets/systemaveragepricesapofgas).
+Natural gas price data are sourced from the [Office for National Statistics](https://www.ons.gov.uk/economy/economicoutputandproductivity/output/datasets/systemaveragepricesapofgas).
 
-Weather data is sourced from the UK Met Office (see references below). 
+Weather data are sourced from the UK Met Office (see references below). 
 The locations used were Heathrow in Greater London, Crosby in Merseyside 
 and Dyce in Aberdeenshire, since these are all near major population 
 centres and wind farms.
-
-*References:*
 
 Met Office (2025): MIDAS Open: UK hourly weather observation data, v202507. 
 NERC EDS Centre for Environmental Data Analysis, 18 July 2025. 
