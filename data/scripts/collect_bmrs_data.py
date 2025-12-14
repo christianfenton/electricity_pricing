@@ -28,12 +28,13 @@ python scripts/collect_bmrs_data.py --start-date 2021-01-01 --end-date 2025-01-0
 
 import os
 import argparse
+
 from datetime import datetime, timedelta
 import requests
 import pandas as pd
 import numpy as np
-from electricity_pricing.utils import get_expected_periods
 
+from utilities import expected_periods
 
 def collect_agpt_data(start_date, end_date, verbose=False):
     """
@@ -397,7 +398,7 @@ def clean_dataset(df, verbose=False):
     ).size()
     irregular_days = []
     for date, count in daily_counts.items():
-        expected = get_expected_periods(pd.Timestamp(date))
+        expected = expected_periods(pd.Timestamp(date))
         if count != expected:
             irregular_days.append((date, count, expected))
 
@@ -488,7 +489,7 @@ def validate_dataset(df, verbose=False):
     ).size()
     irregular_days = []
     for date, count in daily_counts.items():
-        expected = get_expected_periods(pd.Timestamp(date))
+        expected = expected_periods(pd.Timestamp(date))
         if count != expected:
             irregular_days.append((date, count, expected))
 

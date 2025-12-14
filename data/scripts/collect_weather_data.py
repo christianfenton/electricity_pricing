@@ -28,6 +28,7 @@ python scripts/collect_weather_data.py --years 2021 2022 2023 2024 --verbose
 
 import os
 import argparse
+
 import pandas as pd
 import numpy as np
 
@@ -110,10 +111,13 @@ def collect_weather_data(data_dir, locations=None, years=None, verbose=False):
                 df_rad.drop(columns="ob_end_time", inplace=True)
                 df_merged = df_hw.merge(df_rad, on="ob_time", how="left")
             else:
+
                 if verbose:
                     print(
-                        f"Warning: No radiation data found for {location} {year}"
+                        f"""Warning: No radiation data 
+                        found for {location} {year}"""
                     )
+
                 df_hw["glbl_irad_amt"] = np.nan
                 df_merged = df_hw
 
@@ -130,63 +134,11 @@ def collect_weather_data(data_dir, locations=None, years=None, verbose=False):
     df_weather = pd.concat(dfs, ignore_index=True)
 
     # Sort by location and time
-    df_weather = df_weather.sort_values(["location", "ob_time"]).reset_index(
-        drop=True
-    )
+    df_weather = df_weather.sort_values(
+        ["location", "ob_time"]
+    ).reset_index(drop=True)
 
     return df_weather
-
-
-def validate_weather_data(df, verbose=False):
-    """
-    Validate weather dataset for completeness and quality.
-
-    Args:
-        df: DataFrame with weather data
-        verbose: If True, print validation results
-
-    Returns:
-        True if validation passes, raises ValueError otherwise
-    """
-    errors = []
-
-    # Check required columns
-    required_cols = [
-        "ob_time",
-        "location",
-        "wind_speed",
-        "wind_direction",
-        "visibility",
-        "air_temperature",
-        "glbl_irad_amt",
-    ]
-    missing_cols = [col for col in required_cols if col not in df.columns]
-    if missing_cols:
-        errors.append(f"Missing required columns: {', '.join(missing_cols)}")
-
-    # Check for duplicate timestamps within each location
-    duplicates = df.duplicated(subset=["location", "ob_time"], keep=False)
-    if duplicates.any():
-        n_duplicates = duplicates.sum()
-        errors.append(
-            f"Found {n_duplicates} duplicate (location, timestamp) combinations"
-        )
-
-    # Check for missing values in critical columns
-    for col in ["ob_time", "location", "wind_speed", "air_temperature"]:
-        if col in df.columns:
-            n_missing = df[col].isna().sum()
-            if n_missing > 0:
-                errors.append(f"Found {n_missing} missing values in {col}")
-
-    if len(errors) > 0:
-        error_msg = "Validation failed:\n" + "\n".join(errors)
-        raise ValueError(error_msg)
-
-    if verbose:
-        print("All validation checks passed")
-
-    return True
 
 
 def main():
@@ -252,10 +204,6 @@ def main():
         years=args.years,
         verbose=args.verbose,
     )
-
-    # # Validate dataset
-    # print("\nValidating dataset...") if args.verbose else None
-    # validate_weather_data(df_weather, verbose=args.verbose)
 
     # Save to CSV
     os.makedirs(os.path.dirname(args.output_path), exist_ok=True)

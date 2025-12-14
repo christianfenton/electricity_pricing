@@ -23,6 +23,7 @@ python scripts/collect_gas_prices.py --start-date 2021-01-01 --end-date 2025-01-
 
 import os
 import argparse
+
 import pandas as pd
 
 
