@@ -9,3 +9,5 @@ venv/
 .pytest_cache/
 
 data/raw/
+dev/
+figures/
