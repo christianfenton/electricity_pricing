@@ -29,6 +29,7 @@ class ForecastModel(Protocol):
         endog: pd.Series,
         exog: Optional[pd.DataFrame] = None,
         refit: bool = True,
+        copy_initialization: bool = True,
         **kwargs
     ) -> "ForecastModel":
         """Apply model to new data, returning updated fitted model."""
@@ -93,11 +94,11 @@ def forecast_dayahead(
     df: pd.DataFrame,
     issue_date: pd.Timestamp,
     issue_period: int,
-    exog_cols: List[str],
     *,
+    endog_col: str = "ELECTRICITY_PRICE",
     date_col: str = "SETTLEMENT_DATE",
     period_col: str = "SETTLEMENT_PERIOD",
-    endog_col: str = "ELECTRICITY_PRICE",
+    exog_cols: Optional[List[str]] = None,
     percentiles: Optional[List[float]] = None,
     n_bootstrap: int = 500,
     seed: int = 0,
@@ -110,25 +111,41 @@ def forecast_dayahead(
         df: DataFrame with all required columns
         issue_date: Date when forecast is issued
         issue_period: Period when forecast is issued (e.g., 18 for 09:00)
-        exog_cols: Exogenous columns used for forecasting
-        cols: Column name specification
-        percentiles: If provided, compute bootstrapped confidence intervals 
+
+    Kwargs:
+        endog_col: Column containing endogenous variable
+            Default: "ELECTRICITY_PRICE"
+        date_col: Date column (default: "SETTLEMENT_DATE")
+        period_col: Period column (default: "SETTLEMENT_PERIOD")
+        exog_cols: Columns containing exogenous variables (default: None)
+        percentiles: If provided, compute bootstrapped confidence intervals
             at these percentiles
         n_bootstrap: Number of bootstrapped samples (default: 500)
             Ignored if percentiles are not provided
         seed: Random seed for bootstrapping
 
     Returns:
-        DayForecast containing point forecast and optional percentiles
+        DataFrame with columns:
+            - date_col
+            - period_col
+            - "forecast"
+            - "actual"
+            - "issue_date"
+            - "issue_period"
+            - Percentile columns p{X}, e.g. "p2.5" for the 2.5th percentile
     """
     fcast_start, fcast_end, target_date, n_tomorrow = _get_forecast_horizon(
         df, issue_date, issue_period, date_col, period_col
     )
 
     # Point forecast
-    forecast_exog = df.iloc[fcast_start:fcast_end][exog_cols]
-    steps_full = len(forecast_exog)
-    full_forecast = fitted_model.forecast(steps=steps_full, exog=forecast_exog)
+    if exog_cols is not None and len(exog_cols) > 0:
+        forecast_exog = df.iloc[fcast_start:fcast_end][exog_cols]
+        steps_full = len(forecast_exog)
+        full_forecast = fitted_model.forecast(steps=steps_full, exog=forecast_exog)
+    else:
+        steps_full = fcast_end - fcast_start
+        full_forecast = fitted_model.forecast(steps=steps_full, exog=None)
     tomorrow_forecast = full_forecast[-n_tomorrow:]
 
     # Get actual values for target date
@@ -143,6 +160,7 @@ def forecast_dayahead(
         "forecast": tomorrow_forecast,
         "actual": actuals,
         "issue_date": issue_date,
+        "issue_period": issue_period,
     })
 
     # Bootstrap confidence intervals if requested
@@ -167,11 +185,12 @@ def rolling_dayahead_forecast(
     issue_dates: pd.DatetimeIndex,
     issue_period: int,
     n_train_samples: int,
-    exog_cols_fit: List[str],
-    exog_cols_predict: List[str],
+    *,
+    endog_col: str = "ELECTRICITY_PRICE",
     date_col: str = "SETTLEMENT_DATE",
     period_col: str = "SETTLEMENT_PERIOD",
-    endog_col: str = "ELECTRICITY_PRICE",
+    exog_cols_fit: Optional[List[str]] = None,
+    exog_cols_predict: Optional[List[str]] = None,
     percentiles: Optional[List[float]] = None,
     n_bootstrap: int = 500,
     seed: int = 0,
@@ -186,15 +205,20 @@ def rolling_dayahead_forecast(
         issue_dates: Dates on which day-ahead forecasts are issued
         issue_period: Period at which forecast is issued (e.g., 18 for 09:00)
         n_train_samples: Number of training samples for rolling window
-        exog_cols_fit: Columns used as exogenous variables during model fitting
-        exog_cols_predict: Columns used for prediction
-        date_col: Name of date column
-        period_col: Name of period column
-        endog_col: Name of endogenous variable column
-        percentiles: If provided, compute bootstrap CIs at these percentiles
-        n_bootstrap: Number of bootstrap samples
-        seed: Base random seed (incremented for each forecast date)
-        verbose: Whether to print progress
+
+    Kwargs:
+        endog_col: Column containing endogenous variable
+            Default: "ELECTRICITY_PRICE"
+        date_col: Date column (default: "SETTLEMENT_DATE")
+        period_col: Period column (default: "SETTLEMENT_PERIOD")
+        exog_cols_fit: Columns containing exogenous variables for fitting
+            Default: None
+        exog_cols_predict: Columns containing exogenous variables for prediction
+            Default: None
+        percentiles: Compute bootstrap CIs at these percentiles (default: None)
+        n_bootstrap: Number of bootstrap samples (default: 500)
+        seed: Random seed incremented by 1 for each forecast date (default: 0)
+        verbose: Whether to print progress (default: True)
 
     Returns:
         DataFrame with columns: date_col, period_col, forecast, actual,
@@ -223,8 +247,8 @@ def rolling_dayahead_forecast(
         results.append(df_dayahead)
 
         if verbose:
-            y_pred = df_dayahead["forecast"].values
-            y_true = df_dayahead["actual"].values
+            y_pred = np.asarray(df_dayahead["forecast"])
+            y_true = np.asarray(df_dayahead["actual"])
             _rmse = rmse(y_pred, y_true)
             _mae = mae(y_pred, y_true)
             print(f"  RMSE: {_rmse:.2f}, MAE: {_mae:.2f}")
@@ -233,18 +257,24 @@ def rolling_dayahead_forecast(
         if i < len(issue_dates) - 1:
 
             issue_idx = _find_issue_index(
-                df, 
-                issue_dates[i + 1], issue_period, 
+                df,
+                issue_dates[i + 1], issue_period,
                 date_col, period_col
             )
             train_start = issue_idx - n_train_samples
             train_end = issue_idx
-            
+
             train_df = df.iloc[train_start:train_end]
+
+            # Handle exogenous variables
+            if exog_cols_fit is not None and len(exog_cols_fit) > 0:
+                train_exog = train_df[exog_cols_fit]
+            else:
+                train_exog = None
 
             current_model = current_model.apply(
                 endog=train_df[endog_col],
-                exog=train_df[exog_cols_fit],
+                exog=train_exog,
                 refit=True,
                 copy_initialization=True,
             )
