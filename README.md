@@ -15,7 +15,7 @@ half-hourly settlement periods on day-ahead auctions.
 - `analysis/`: Exploratory data analysis
 - `models/`: Forecasting models
 - `utilities/`: Utilities for data processing, feature creation, etc.
-- `data/`: Raw and processed data, along with data processing scripts
+- `data/`: Raw and processed data
 
 ## Installation
 
@@ -29,10 +29,10 @@ pip install -r requirements.txt
 ### ETL pipeline
 
 The data is collected and processed with the following scripts:
-- `data/scripts/collect_bmrs_data.py`
-- `data/scripts/collect_gas_prices.py`
-- `data/scripts/collect_neso_forecasts.py`
-- `data/scripts/collect_weather_data.py`
+- `etl/bmrs_pipeline.py`
+- `etl/gas_price_pipeline.py`
+- `etl/met_office_pipeline.py`
+- `etl/neso_pipeline.py`
 
 The data resulting from running these scripts is stored in `data/processed/`
 
