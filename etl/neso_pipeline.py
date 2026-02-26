@@ -35,6 +35,7 @@ import os
 import argparse
 import datetime as dt
 
+import numpy as np
 import requests
 import pandas as pd
 
@@ -51,12 +52,12 @@ class DemandForecastProcessor:
 
     def collect(self) -> pd.DataFrame:
         """Fetch demand forecasts and interpolate to half-hourly resolution."""
-        df = self._fetch()
-        df = self._standardise_columns(df)
-        df = self._interpolate_to_half_hourly(df)
+        df = self.fetch()
+        df = self.standardise_columns(df)
+        df = self.interpolate(df)
         return df
 
-    def _fetch(self) -> pd.DataFrame:
+    def fetch(self) -> pd.DataFrame:
         """Fetch demand forecast data from NESO API."""
         url = "https://api.neso.energy/api/3/action/datastore_search_sql"
         resource_id = "9847e7bb-986e-49be-8138-717b25933fbb"
@@ -91,7 +92,8 @@ class DemandForecastProcessor:
 
         return df
 
-    def _standardise_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+    @staticmethod
+    def standardise_columns(df: pd.DataFrame) -> pd.DataFrame:
         """Rename columns and localise timestamps."""
         df.rename(
             columns={
@@ -103,15 +105,55 @@ class DemandForecastProcessor:
         )
 
         df["ISSUE_TS"] = pd.to_datetime(df["ISSUE_TS"]).dt.tz_localize(
-            "Europe/London",
-            ambiguous=True,
-            nonexistent="shift_forward",
+            "Europe/London", ambiguous=True, nonexistent="shift_forward",
         )
 
         return df
 
     @staticmethod
-    def _interpolate_to_half_hourly(df: pd.DataFrame) -> pd.DataFrame:
+    def parse_timestamps(df: pd.DataFrame) -> pd.DataFrame:
+        """Convert CP_ST_TIME / CP_END_TIME integers into tz-aware timestamps."""
+        df = df.copy()
+
+        start = df["CP_ST_TIME"].astype(str).str.zfill(4).replace("2400", "0000")
+        end = df["CP_END_TIME"].astype(str).str.zfill(4).replace("2400", "0000")
+
+        df["CP_START"] = (
+            pd.to_datetime(
+                df["TARGET_DATE"].astype(str) + " " + start, format="%Y-%m-%d %H%M"
+            ).dt.tz_localize(
+                "Europe/London", ambiguous=True, nonexistent="shift_forward"
+            )
+        )
+
+        df["CP_END"] = (
+            pd.to_datetime(
+                df["TARGET_DATE"].astype(str) + " " + end, format="%Y-%m-%d %H%M"
+            ).dt.tz_localize(
+                "Europe/London", ambiguous=True, nonexistent="shift_forward"
+            )
+        )
+
+        df.loc[df["CP_ST_TIME"].astype(int) == 2400, "CP_START"] += pd.Timedelta(days=1)
+        df.loc[df["CP_END_TIME"].astype(int) == 2400, "CP_END"] += pd.Timedelta(days=1)
+
+        return df
+
+    @staticmethod
+    def _build_half_hourly_grid(target_dates) -> pd.DatetimeIndex:
+        """Build a complete half-hourly grid for the given target dates."""
+        daily_ranges = []
+        for day in sorted(target_dates):
+            day_ts = pd.Timestamp(day, tz="Europe/London")
+            n_periods = expected_periods(day_ts)
+            day_index = pd.date_range(
+                day_ts, periods=n_periods, freq="30min", tz="Europe/London"
+            )
+            daily_ranges.append(day_index)
+        return pd.DatetimeIndex(np.concatenate(daily_ranges))
+
+    @staticmethod
+    def interpolate(df: pd.DataFrame) -> pd.DataFrame:
         """
         Expand cardinal-point demand forecasts onto a half-hourly grid.
 
@@ -145,7 +187,7 @@ class DemandForecastProcessor:
                 Fixed, Trough or Peak. Cardinal points (CPs) can
                 either be fixed (occur at a fixed time), trough (minimum demands
                 during a set period of the day) or peak(maximum demands during
-                a set period of the day). These are represented throught the
+                a set period of the day). These are represented through the
                 first letter of the point type (F,T or P).
             Cardinal Point Start Time:
                 The time when a particular cardinal point
@@ -156,107 +198,46 @@ class DemandForecastProcessor:
                 the day. This is given relative to the timezone in effect
                 in the UK at the forecast time and date.
         """
+        df = DemandForecastProcessor.parse_timestamps(df)
 
-        # Create time-stamps from date and time strings
-        start = df["CP_ST_TIME"].astype(str).str.zfill(4).replace("2400", "0000")
-        end = df["CP_END_TIME"].astype(str).str.zfill(4).replace("2400", "0000")
+        # Representative time for each CP (midpoint of its window)
+        df["CP_MID"] = df["CP_START"] + (df["CP_END"] - df["CP_START"]) / 2
 
-        df["CP_START"] = pd.to_datetime(
-            df["TARGET_DATE"].astype(str) + " " + start, format="%Y-%m-%d %H%M"
-        ).dt.tz_localize(
-            "Europe/London",
-            ambiguous=True,
-            nonexistent="shift_forward",
-        )
+        results = []
 
-        df["CP_END"] = pd.to_datetime(
-            df["TARGET_DATE"].astype(str) + " " + end, format="%Y-%m-%d %H%M"
-        ).dt.tz_localize(
-            "Europe/London",
-            ambiguous=True,
-            nonexistent="shift_forward",
-        )
+        for issue_ts, group in df.sort_values("ISSUE_TS").groupby("ISSUE_TS"):
+            target_dates = np.sort(group["TARGET_DATE"].unique())
+            grid = DemandForecastProcessor._build_half_hourly_grid(target_dates)
 
-        df.loc[df["CP_ST_TIME"] == "2400", "CP_START"] += pd.Timedelta(days=1)
-        df.loc[df["CP_END_TIME"] == "2400", "CP_END"] += pd.Timedelta(days=1)
+            # Snap cardinal points to nearest grid points and drop duplicates
+            snap_idx = grid.get_indexer(group["CP_MID"], method="nearest")
+            anchors = pd.DataFrame(
+                {
+                    "idx": snap_idx, 
+                    "DEMAND_FORECAST": group["DEMAND_FORECAST"].values
+                }
+            ).drop_duplicates(subset="idx", keep="first")
 
-        # Expand to get half-hourly resolution between CP_START and CP_END
-        rows = []
-        for _, r in df.iterrows():
-            idx = pd.date_range(
-                r["CP_START"],
-                r["CP_END"] - pd.Timedelta(minutes=30),
-                freq="30min",
-                tz="Europe/London",
-            )
-            rows.append(
-                pd.DataFrame(
-                    {
-                        "TARGET_TS": idx,
-                        "DEMAND_FORECAST": r["DEMAND_FORECAST"],
-                        "ISSUE_TS": r["ISSUE_TS"],
-                    }
-                )
-            )
+            out = pd.Series(np.nan, index=grid, name="DEMAND_FORECAST")
+            out.iloc[anchors["idx"].values] = anchors["DEMAND_FORECAST"].values
+            out = out.interpolate(method="pchip", limit_direction="both")
 
-        expanded = pd.concat(rows, ignore_index=True)
+            results.append(pd.DataFrame({"DEMAND_FORECAST": out, "ISSUE_TS": issue_ts}))
 
-        # Choose earliest-issued forecast per target half-hour
-        expanded = (
-            expanded.sort_values("ISSUE_TS")
-            .drop_duplicates(subset="TARGET_TS", keep="first")
-            .set_index("TARGET_TS")
-        )
+        out = pd.concat(results)
 
-        # Reindex to half-hourly resolved grid
-        # Build per-day ranges to correctly handle DST transitions
-        first_day = expanded.index.min().normalize()
-        last_day = expanded.index.max().normalize()
-        day_starts = pd.date_range(first_day, last_day, freq="D", tz="Europe/London")
-        daily_ranges = []
-        for day in day_starts:
-            n_periods = expected_periods(day)
-            day_index = pd.date_range(
-                day, periods=n_periods, freq="30min", tz="Europe/London"
-            )
-            daily_ranges.append(day_index)
-        hh_index = daily_ranges[0].append(daily_ranges[1:])
-
-        out = expanded.reindex(hh_index)
-
-        # Interpolate the forecast for each day to get half-hourly resolution
-        out["TARGET_DATE"] = out.index.date
-        out = out.groupby("TARGET_DATE", group_keys=False).apply(
-            DemandForecastProcessor._interp_day, include_groups=False
-        )
-
-        # Compute settlement (date, time) pairs
         issue = out["ISSUE_TS"].apply(timestamp_to_settlement)
         out["ISSUE_DATE"] = issue.str[0]
         out["ISSUE_PERIOD"] = issue.str[1]
         out["TARGET_DATE"] = out.index.date
         out["TARGET_PERIOD"] = out.groupby("TARGET_DATE").cumcount() + 1
 
-        # Keep only desired columns and reset index
-        out = out.reset_index(drop=True)[
+        return out.reset_index(drop=True)[
             [
-                "ISSUE_DATE",
-                "ISSUE_PERIOD",
-                "TARGET_DATE",
-                "TARGET_PERIOD",
-                "DEMAND_FORECAST",
+                "ISSUE_DATE", "ISSUE_PERIOD", "TARGET_DATE", 
+                "TARGET_PERIOD", "DEMAND_FORECAST"
             ]
         ]
-
-        return out
-
-    @staticmethod
-    def _interp_day(df: pd.DataFrame) -> pd.DataFrame:
-        df["DEMAND_FORECAST"] = df["DEMAND_FORECAST"].interpolate(
-            method="time", limit_direction="both"
-        )
-        df["ISSUE_TS"] = df["ISSUE_TS"].bfill().ffill()
-        return df
 
 
 class WindForecastProcessor:

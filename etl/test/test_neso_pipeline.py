@@ -60,7 +60,7 @@ class TestDemandInterpolation:
         issue_ts = pd.Timestamp("2024-06-14 08:00", tz="Europe/London")
         df = self._make_cardinal_points("2024-06-15", issue_ts, self.SEGMENTS)
 
-        result = DemandForecastProcessor._interpolate_to_half_hourly(df)
+        result = DemandForecastProcessor.interpolate(df)
 
         assert set(result.columns) == self.OUTPUT_COLUMNS
         assert len(result) == 48
@@ -72,7 +72,7 @@ class TestDemandInterpolation:
         issue_ts = pd.Timestamp("2024-10-26 08:00", tz="Europe/London")
         df = self._make_cardinal_points("2024-10-27", issue_ts, self.SEGMENTS)
 
-        result = DemandForecastProcessor._interpolate_to_half_hourly(df)
+        result = DemandForecastProcessor.interpolate(df)
 
         assert len(result) == 50
         assert list(result["TARGET_PERIOD"]) == list(range(1, 51))
@@ -83,7 +83,7 @@ class TestDemandInterpolation:
         issue_ts = pd.Timestamp("2024-03-30 08:00", tz="Europe/London")
         df = self._make_cardinal_points("2024-03-31", issue_ts, self.SEGMENTS)
 
-        result = DemandForecastProcessor._interpolate_to_half_hourly(df)
+        result = DemandForecastProcessor.interpolate(df)
 
         assert len(result) == 46
         assert list(result["TARGET_PERIOD"]) == list(range(1, 47))
@@ -94,7 +94,7 @@ class TestDemandInterpolation:
         issue_ts = pd.Timestamp("2024-06-14 08:00", tz="Europe/London")
         df = self._make_cardinal_points("2024-06-15", issue_ts, self.SEGMENTS)
 
-        result = DemandForecastProcessor._interpolate_to_half_hourly(df)
+        result = DemandForecastProcessor.interpolate(df)
 
         assert result.isna().sum().sum() == 0
 
@@ -103,7 +103,7 @@ class TestDemandInterpolation:
         issue_ts = pd.Timestamp("2024-10-26 08:00", tz="Europe/London")
         df = self._make_cardinal_points("2024-10-27", issue_ts, self.SEGMENTS)
 
-        result = DemandForecastProcessor._interpolate_to_half_hourly(df)
+        result = DemandForecastProcessor.interpolate(df)
 
         assert result.isna().sum().sum() == 0
 
@@ -112,7 +112,7 @@ class TestDemandInterpolation:
         issue_ts = pd.Timestamp("2024-03-30 08:00", tz="Europe/London")
         df = self._make_cardinal_points("2024-03-31", issue_ts, self.SEGMENTS)
 
-        result = DemandForecastProcessor._interpolate_to_half_hourly(df)
+        result = DemandForecastProcessor.interpolate(df)
 
         assert result.isna().sum().sum() == 0
 
@@ -124,7 +124,7 @@ class TestDemandInterpolation:
             dfs.append(self._make_cardinal_points(date, issue_ts, self.SEGMENTS))
         df = pd.concat(dfs, ignore_index=True)
 
-        result = DemandForecastProcessor._interpolate_to_half_hourly(df)
+        result = DemandForecastProcessor.interpolate(df)
 
         counts = result.groupby("TARGET_DATE").size()
         assert counts[dt.date(2024, 10, 26)] == 48
@@ -137,22 +137,151 @@ class TestDemandInterpolation:
         issue_ts = pd.Timestamp("2024-06-14 08:00", tz="Europe/London")
         df = self._make_cardinal_points("2024-06-15", issue_ts, self.SEGMENTS)
 
-        result = DemandForecastProcessor._interpolate_to_half_hourly(df)
+        result = DemandForecastProcessor.interpolate(df)
 
         assert (result["ISSUE_DATE"] == dt.date(2024, 6, 14)).all()
         assert (result["ISSUE_PERIOD"] == 17).all()  # 08:00 = period 17
 
-    def test_demand_values_interpolated(self):
-        """Demand values should be interpolated between cardinal points."""
+    def test_demand_values_at_midpoints(self):
+        """CP demand values should be exact at the midpoint of each window."""
         issue_ts = pd.Timestamp("2024-06-14 08:00", tz="Europe/London")
         df = self._make_cardinal_points("2024-06-15", issue_ts, self.SEGMENTS)
 
-        result = DemandForecastProcessor._interpolate_to_half_hourly(df)
+        result = DemandForecastProcessor.interpolate(df)
 
-        # Period 1 (00:00) is in the overnight segment -> 20000
-        assert result.loc[result["TARGET_PERIOD"] == 1, "DEMAND_FORECAST"].iloc[0] == 20000
-        # Period 33 (16:00) is in the evening peak segment -> 33000
-        assert result.loc[result["TARGET_PERIOD"] == 33, "DEMAND_FORECAST"].iloc[0] == 33000
+        midpoint_periods = {7: 20000, 16: 25000, 26: 28000, 36: 33000, 44: 27000}
+        for period, expected_demand in midpoint_periods.items():
+            actual = result.loc[
+                result["TARGET_PERIOD"] == period, "DEMAND_FORECAST"
+            ].iloc[0]
+            assert actual == expected_demand, (
+                f"Period {period}: expected {expected_demand}, got {actual}"
+            )
+
+    def test_demand_curve_smooth_between_cps(self):
+        """Values between CPs should transition smoothly (no step jumps)."""
+        issue_ts = pd.Timestamp("2024-06-14 08:00", tz="Europe/London")
+        df = self._make_cardinal_points("2024-06-15", issue_ts, self.SEGMENTS)
+
+        result = DemandForecastProcessor.interpolate(df)
+        demand = result["DEMAND_FORECAST"].values
+
+        # Between overnight midpoint (P7, 20000) and morning midpoint (P16, 25000),
+        # PCHIP should produce values strictly between the two CP values
+        transition = demand[7:15]  # periods 8-15 (between P7 and P16)
+        assert all(v > 20000 for v in transition), "Morning ramp should be above overnight"
+        assert all(v < 25000 for v in transition), "Morning ramp should be below morning CP"
+
+    def test_2400_fixed_cp_does_not_crash(self):
+        """A Fixed CP at 2400 (midnight boundary) should not crash PCHIP."""
+        issue_ts = pd.Timestamp("2024-06-14 08:00", tz="Europe/London")
+        segments_with_2400 = [
+            (0, 600, 20000),
+            (600, 900, 25000),
+            (900, 1600, 28000),
+            (1600, 1900, 33000),
+            (1900, 2400, 27000),
+            (2400, 2400, 22000),   # Fixed CP at midnight boundary
+        ]
+        df = self._make_cardinal_points("2024-06-15", issue_ts, segments_with_2400)
+
+        result = DemandForecastProcessor.interpolate(df)
+
+        assert len(result) == 48
+        assert (result["TARGET_DATE"] == dt.date(2024, 6, 15)).all()
+        assert result["DEMAND_FORECAST"].isna().sum() == 0
+
+    def test_fixed_cardinal_point(self):
+        """A Fixed CP (CP_START == CP_END) should not crash and should be interpolated through."""
+        issue_ts = pd.Timestamp("2024-06-14 08:00", tz="Europe/London")
+        segments_with_fixed = [
+            (0, 600, 20000),
+            (600, 600, 24000),     # Fixed CP at 06:00
+            (600, 900, 25000),
+            (900, 1600, 28000),
+            (1600, 1900, 33000),
+            (1900, 2400, 27000),
+        ]
+        df = self._make_cardinal_points("2024-06-15", issue_ts, segments_with_fixed)
+
+        result = DemandForecastProcessor.interpolate(df)
+
+        assert len(result) == 48
+        assert result.isna().sum().sum() == 0
+
+
+class TestParseCPTimestamps:
+    """Test DemandForecastProcessor._parse_cp_timestamps."""
+
+    @staticmethod
+    def _make_row(target_date, st_time, end_time):
+        return pd.DataFrame([{
+            "TARGET_DATE": target_date,
+            "CP_ST_TIME": st_time,
+            "CP_END_TIME": end_time,
+            "DEMAND_FORECAST": 25000,
+            "ISSUE_TS": pd.Timestamp("2024-06-14 08:00", tz="Europe/London"),
+        }])
+
+    def test_normal_timestamps(self):
+        """HHMM ints (0, 600, 1600) produce correct tz-aware timestamps."""
+        df = self._make_row("2024-06-15", 0, 600)
+        result = DemandForecastProcessor.parse_timestamps(df)
+
+        assert result["CP_START"].iloc[0] == pd.Timestamp("2024-06-15 00:00", tz="Europe/London")
+        assert result["CP_END"].iloc[0] == pd.Timestamp("2024-06-15 06:00", tz="Europe/London")
+
+    def test_2400_becomes_next_day_midnight(self):
+        """CP_END_TIME=2400 should become next day 00:00."""
+        df = self._make_row("2024-06-15", 1900, 2400)
+        result = DemandForecastProcessor.parse_timestamps(df)
+
+        assert result["CP_END"].iloc[0] == pd.Timestamp("2024-06-16 00:00", tz="Europe/London")
+
+    def test_fixed_cp_start_equals_end(self):
+        """CP_ST_TIME == CP_END_TIME produces CP_START == CP_END."""
+        df = self._make_row("2024-06-15", 600, 600)
+        result = DemandForecastProcessor.parse_timestamps(df)
+
+        assert result["CP_START"].iloc[0] == result["CP_END"].iloc[0]
+        assert result["CP_START"].iloc[0] == pd.Timestamp("2024-06-15 06:00", tz="Europe/London")
+
+
+class TestBuildHalfHourlyGrid:
+    """Test DemandForecastProcessor._build_half_hourly_grid."""
+
+    def test_normal_day_48_slots(self):
+        """A single normal day should produce a 48-entry index."""
+        grid = DemandForecastProcessor._build_half_hourly_grid(
+            [dt.date(2024, 6, 15)]
+        )
+
+        assert len(grid) == 48
+
+    def test_autumn_dst_50_slots(self):
+        """Autumn DST day (Oct 27 2024) should produce 50 entries."""
+        grid = DemandForecastProcessor._build_half_hourly_grid(
+            [dt.date(2024, 10, 27)]
+        )
+
+        assert len(grid) == 50
+
+    def test_spring_dst_46_slots(self):
+        """Spring DST day (Mar 31 2024) should produce 46 entries."""
+        grid = DemandForecastProcessor._build_half_hourly_grid(
+            [dt.date(2024, 3, 31)]
+        )
+
+        assert len(grid) == 46
+
+    def test_multi_day_grid(self):
+        """A 3-day span including DST should produce correct total entries."""
+        grid = DemandForecastProcessor._build_half_hourly_grid(
+            [dt.date(2024, 10, 26), dt.date(2024, 10, 27), dt.date(2024, 10, 28)]
+        )
+
+        # Oct 26 (48) + Oct 27 DST (50) + Oct 28 (48) = 146
+        assert len(grid) == 146
 
 
 class TestWindProcessor:
