@@ -17,7 +17,9 @@ from .bootstrap import (
     get_bootstrap_percentiles,
 )
 
-from .forecast import rolling_dayahead_forecast, forecast_dayahead
+from .forecast import (
+    Forecaster,
+)
 
 from .evaluation import (
     rmse,
@@ -30,6 +32,7 @@ from .evaluation import (
 from .features import (
     is_holiday,
     is_weekend,
+    create_temporal_features
 )
 
 __all__ = [
@@ -41,14 +44,14 @@ __all__ = [
     "last_sunday_of_month",
     "validate_timestamps",
     "timestamp_to_settlement",
+    "train_test_split",
 
     # Bootstrapping
     "cond_sieve_bootstrap",
     "get_bootstrap_percentiles",
 
     # Forecasting
-    "forecast_dayahead",
-    "rolling_dayahead_forecast",
+    "Forecaster",
 
     # Evaluation metrics
     "rmse",
@@ -60,4 +63,5 @@ __all__ = [
     # Feature utilities
     "is_holiday",
     "is_weekend",
+    "create_temporal_features",
 ]

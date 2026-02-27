@@ -2,6 +2,7 @@ from typing import Tuple
 
 import numpy as np
 import statsmodels.api as sm
+from numba import njit, prange
 
 
 def cond_sieve_bootstrap(
@@ -13,7 +14,14 @@ def cond_sieve_bootstrap(
     """
     Conditional sieve bootstrapping on a point forecast.
 
-    Reference: "Sieve bootstrap for time series", P. Bühlmann.
+    Args:
+        residuals (Array): Residuals from fitting the model to the training data
+        point_forecast (Array): A point (mean) forecast to horizon from
+        n_bootstrap (int): Number of paths generated
+        seed (int): Seed for pseudo-random number generator
+
+    Returns:
+        bootstrap_paths: Matrix with shape (n_bootstrap, len(point_forecast))
     
     The bootstrapping procedure goes as follows:
         1. Get residuals X_k from the fitted model
@@ -23,22 +31,8 @@ def cond_sieve_bootstrap(
         5. Generate new model residuals using the bootstrapped sieve residuals
         6. Generate forecast paths using the bootstrapped model residuals
 
-    Args:
-        residuals (Array): Residuals from fitting the model to the training data
-        point_forecast (Array): A point (mean) forecast to horizon from
-        n_bootstrap (int): Number of paths generated
-        seed (int): Seed for pseudo-random number generator
-
-    Returns:
-        bootstrap_paths: Matrix with shape (n_bootstrap, len(point_forecast))
+    Reference: "Sieve bootstrap for time series", P. Bühlmann.
     """
-    # Convert to numpy arrays to avoid pandas index issues
-    residuals = np.asarray(residuals)
-    point_forecast = np.asarray(point_forecast)
-
-    # Forecast horizon
-    horizon = len(point_forecast)
-
     # Set PRNG seed
     np.random.seed(seed)
 
@@ -52,45 +46,54 @@ def cond_sieve_bootstrap(
     sieve_resid = sieve_fitted.resid
     eps_centered = sieve_resid - sieve_resid.mean()
 
-    bootstrap_paths = np.zeros((n_bootstrap, horizon))
-
     # Get AR coefficients from sieve model
     ar_params = sieve_fitted.params[1:]  # Exclude intercept
 
-    # Get last p_sieve residuals from training set to initialise bootstrap
+    # Get last p_sieve residuals from training set to initialise bootstrapping
     last_resid = residuals[-p_sieve:]
 
-    # TODO: Use this for multiprocessing
-    # def map(args):
-    #     eps_centered, horizon, p_sieve, ar_params, point_forecast = args
-    #     # Bootstrap (resample) centered innovations
-    #     eps_boot = np.random.choice(eps_centered, size=horizon, replace=True)
-    #     # Generate residual path
-    #     X_boot = np.zeros(horizon + p_sieve)
-    #     X_boot[:p_sieve] = last_resid  # Init with residuals from training
-    #     for k in range(horizon):
-    #         # AR process: X_{k+1} = sum(phi_j * X_{k+1-j}) + epsilon_{k+1}
-    #         ar_contribution = np.sum(ar_params * X_boot[k : k + p_sieve][::-1])
-    #         X_boot[k + p_sieve] = ar_contribution + eps_boot[k]
-    #     # Generate forecast path
-    #     bootstrap_path = point_forecast + X_boot[p_sieve:]
-    #     return  bootstrap_path
+    return _bootstrap_paths_numba(
+        np.asarray(eps_centered), np.asarray(point_forecast),
+        np.asarray(ar_params), np.asarray(last_resid),
+        p_sieve, n_bootstrap, seed
+    )
 
-    for b in range(n_bootstrap):
-        # Bootstrap (resample) centered innovations
-        eps_boot = np.random.choice(eps_centered, size=horizon, replace=True)
 
-        # Generate residual path
-        X_boot = np.zeros(horizon + p_sieve)
-        X_boot[:p_sieve] = last_resid  # Init with residuals from training
+@njit(parallel=True, cache=True)
+def _bootstrap_paths_numba(
+    eps_centered: np.ndarray,
+    point_forecast: np.ndarray,
+    ar_params: np.ndarray,
+    last_resid: np.ndarray,
+    p_sieve: int,
+    n_bootstrap: int,
+    seed: int
+):
+    horizon = len(point_forecast)
+    n_eps = len(eps_centered)
+    bootstrap_paths = np.zeros((n_bootstrap, horizon))
 
+    for b in prange(n_bootstrap):
+        np.random.seed(seed + b)  # Each thread gets a deterministic seed
+
+        # Resample the centered innovations
+        eps_boot = np.empty(horizon)
+        for i in range(horizon):
+            eps_boot[i] = eps_centered[np.random.randint(0, n_eps)]
+
+        # Generate residual path via AR process
+        # AR process: X_{k+1} = sum(phi_j * X_{k+1-j}) + epsilon_{k+1}
+        X_boot = np.zeros(p_sieve + horizon)
+        X_boot[:p_sieve] = last_resid[:p_sieve]
         for k in range(horizon):
-            # AR process: X_{k+1} = sum(phi_j * X_{k+1-j}) + epsilon_{k+1}
-            ar_contribution = np.sum(ar_params * X_boot[k : k + p_sieve][::-1])
-            X_boot[k + p_sieve] = ar_contribution + eps_boot[k]
+            ar_contribution = 0.0
+            for j in range(p_sieve):
+                ar_contribution += ar_params[j] * X_boot[p_sieve + k - 1 - j]
+            X_boot[p_sieve + k] = ar_contribution + eps_boot[k]
 
         # Generate forecast path
-        bootstrap_paths[b, :] = point_forecast + X_boot[p_sieve:]
+        for i in range(horizon):
+            bootstrap_paths[b, i] = point_forecast[i] + X_boot[p_sieve + i]
 
     return bootstrap_paths
 

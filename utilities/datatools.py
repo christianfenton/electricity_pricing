@@ -21,7 +21,7 @@ def last_sunday_of_month(year: int, month: int) -> dt.date:
     return last_sunday.date()
 
 
-def expected_periods(date: pd.Timestamp | dt.date) -> int:
+def expected_periods(date_: pd.Timestamp | dt.date) -> int:
     """
     Return the number of half-hourly settlement periods on the given date in the UK.
 
@@ -31,12 +31,12 @@ def expected_periods(date: pd.Timestamp | dt.date) -> int:
     Returns:
         n (int): The number of settlement periods
     """
-    year = date.year
+    year = date_.year
     spring_dst = last_sunday_of_month(year, 3)
     autumn_dst = last_sunday_of_month(year, 10)
-    if date.date() == spring_dst:
+    if date_.date() == spring_dst:
         return 46
-    elif date.date() == autumn_dst:
+    elif date_.date() == autumn_dst:
         return 50
     else:
         return 48
@@ -94,9 +94,9 @@ def create_timestamps(
     Returns:
         A pandas.Series.
     """
-    base_timestamps = pd.to_datetime(df[date_column]).dt.tz_localize(tz)
+    base_timestamps = pd.to_datetime(df[date_column]).dt.tz_localize("Europe/London")
     period_offsets = pd.to_timedelta((df[period_column] - 1) * 30, unit="m")
-    timestamps = base_timestamps + period_offsets
+    timestamps = (base_timestamps + period_offsets).dt.tz_convert(tz)
     return pd.Series(timestamps, index=df.index, name="DATETIME")
 
 
